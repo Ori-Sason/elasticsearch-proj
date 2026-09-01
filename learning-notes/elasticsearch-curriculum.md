@@ -46,10 +46,10 @@ No Kibana dashboards, no cluster scaling, no security hardening in this version 
 **Concepts to cover before the tasks:** node, cluster, index, document, shard (primary vs replica), and what Kibana is for versus Elasticsearch itself. Use a concrete analogy (e.g. index-as-database-table, document-as-row) but also explain where that analogy breaks down.
 
 **Tasks:**
-- [ ] Write a `docker-compose.yaml` for a single-node Elasticsearch cluster + Kibana (security/auth can stay disabled for local dev — note this explicitly as a dev-only choice, not a default)
-- [ ] Start it and confirm cluster health is green via `curl` (`GET _cluster/health`)
-- [ ] Create one index by hand and inspect it in Kibana
-- [ ] Be able to explain, in your own words: node vs index vs shard vs document, and why a single-node dev cluster still has shards
+- [x] Write a `docker-compose.yaml` for a single-node Elasticsearch cluster + Kibana (security/auth can stay disabled for local dev — note this explicitly as a dev-only choice, not a default)
+- [x] Start it and confirm cluster health is green via `curl` (`GET _cluster/health`)
+- [x] Create one index by hand and inspect it in Kibana
+- [x] Be able to explain, in your own words: node vs index vs shard vs document, and why a single-node dev cluster still has shards
 
 **Deliverable:** a running cluster you can hit at `localhost:9200`, and a Kibana instance you can reach in the browser.
 

@@ -6,12 +6,12 @@ This is a session-by-session curriculum for learning Elasticsearch hands-on. It'
 
 **How to use this with Claude Code:** work through sessions in order. Don't skip ahead — each session's deliverable is a dependency for the next one. At the start of each session, tell Claude Code which session number you're on and paste in that section.
 
-**Instruction to Claude Code: teach, don't just execute.** Each session follows the same four-beat pattern — theory, then hands-on, then a deeper theory pass, then more hands-on — and all four matter:
+**Instruction to Claude Code: teach, don't just execute.** Each session follows theory, then hands-on, then (when the topic actually has one) a deeper theory pass, then more hands-on:
 
 - Start with just enough background to know what's about to be built and why. Explain the concept in plain language: what it is, why it exists, what problem it solves. Don't over-explain before letting the learner touch it — this first pass should be light.
 - Move into the session's hands-on tasks. When introducing a command or a piece of code, briefly say what it does and why this is the right tool for the job before running it — not just paste it and move on.
-- After the hands-on work, go back into theory — deeper this time. Mechanisms, edge cases, why it actually works the way it does — now that the hands-on work gives it something to anchor to. This is the session's "Deep dive."
-- Close with more hands-on that applies the deeper theory, so the session doesn't end on theory alone.
+- After the hands-on work, go back into theory — but only if the topic has genuinely more underneath: mechanisms, edge cases, why it actually works the way it does. This is the session's "Deep dive," and it should go into harder territory on the same subject, not just restate the intro from a different angle. If a session's topic doesn't have real depth left to cover, skip this pass instead of manufacturing one — don't relabel a repeat or a semantic rephrasing as a "deep dive."
+- Close with more hands-on that applies whatever theory pass actually happened, so the session doesn't end on theory alone.
 - Connect new ideas to things already covered in earlier sessions, so the mental model builds session over session instead of resetting each time.
 - Prefer asking "do you know why we're doing it this way?" and letting the learner answer, over lecturing uninterrupted — check understanding as you go, not just at the end.
 - It's fine for a session to feel a little slower because of this. The goal is understanding Elasticsearch, not just finishing the checklist.

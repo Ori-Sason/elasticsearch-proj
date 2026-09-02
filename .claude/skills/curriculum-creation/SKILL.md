@@ -12,7 +12,7 @@ Design curriculums that get read and taught from, not just skimmed once and aban
 If any of this isn't already clear from the conversation, ask before drafting — a curriculum built on a wrong guess about scope or level wastes more time than the questions do:
 
 - **The topic and the project it'll be taught through.** A curriculum needs a throughline project, not a list of disconnected exercises — if the user only names a topic ("I want to learn Kafka"), propose a concrete project to learn it through and confirm it, don't just start listing abstract topics.
-- **Audience/skill level.** What the learner already knows that's relevant (adjacent tools, general experience level) — check `reference/user-background.md` if this project has one, the same way `learning-session-notes` does, so sessions calibrate to the right starting depth instead of re-teaching fundamentals or assuming context that hasn't been covered.
+- **Audience/skill level.** What the learner already knows that's relevant (adjacent tools, general experience level) — check `.claude/skills/learning-session-notes/reference/user-background.md` if this project has one, the same file `learning-session-notes` reads, so sessions calibrate to the right starting depth instead of re-teaching fundamentals or assuming context that hasn't been covered.
 - **Environment and tools available**, so tasks are concrete and runnable, not generic.
 - **Rough scope** — single lesson, short series, or full curriculum — and session count if the user has a preference; otherwise choose a number that fits the topic and say why.
 

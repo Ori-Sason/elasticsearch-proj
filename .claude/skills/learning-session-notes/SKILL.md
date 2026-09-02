@@ -47,4 +47,4 @@ Skip a section only if it has nothing worth keeping (other than the Title and TL
 
 ## After writing
 
-Check off the matching task boxes in `learning-notes/elasticsearch-curriculum.md` if they're done and not already checked, per the project's own convention — don't leave that for a separate step.
+Check off the matching task boxes in this project's curriculum file (`learning-notes/<topic>-curriculum.md`, e.g. `learning-notes/elasticsearch-curriculum.md` here) if they're done and not already checked, per the project's own convention — don't leave that for a separate step.

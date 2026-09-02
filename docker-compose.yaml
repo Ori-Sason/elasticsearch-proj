@@ -8,6 +8,9 @@ services:
       - xpack.security.enabled=false
       - xpack.security.enrollment.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    # Hard cap on top of the JVM heap: without this, off-heap memory
+    # (mmap/direct buffers) can grow unbounded on a memory-constrained host.
+    mem_limit: 1g
     ports:
       - "9200:9200"
     volumes:
@@ -23,6 +26,10 @@ services:
     container_name: kibana-logs
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      # Kibana's Node process has no default cap; without this it can
+      # grow past what a small VM can spare.
+      - NODE_OPTIONS=--max-old-space-size=768
+    mem_limit: 1g
     ports:
       - "5601:5601"
     depends_on:
@@ -30,4 +37,4 @@ services:
         condition: service_healthy
 
 volumes:
-  es-data:
+  es-data: {}

@@ -1,6 +1,6 @@
 # Session 1 — Cluster fundamentals notes
 
-Concepts and troubleshooting covered while working through Session 1 (standing up the cluster). Kept as a reference, not required reading to continue.
+Concepts covered while working through Session 1 (standing up the cluster).
 
 ## Core concepts: node, cluster, index, document, shard
 
@@ -14,9 +14,10 @@ Concepts and troubleshooting covered while working through Session 1 (standing u
 
 ## Replica placement is a hard rule, not a performance tweak
 
-A replica shard is **never** allowed to live on the same node as its primary — this is enforced by Elasticsearch's shard allocator regardless of CPU, threads, or disk space available. The reason: a replica's entire purpose is fault tolerance (if the node holding the primary dies, the data still exists elsewhere). A replica on the same node as its primary would provide zero protection, so Elasticsearch won't place one there.
+A replica shard is **never** allowed to live on the same node as its primary — this is enforced by Elasticsearch's shard allocator. The reason: a replica's entire purpose is fault tolerance (if the node, a process, holding the primary dies, the data still exists elsewhere). A replica on the same node as its primary would provide zero protection, so Elasticsearch won't place one there.
 
-Consequence: a fresh single-node cluster, using an index's default settings (1 replica), will have its replica shards sitting **unassigned** — there's nowhere valid to put them. Cluster health reports **yellow**, not green (not broken — just not fully redundant). Fix for a single-node dev cluster: explicitly set `number_of_replicas: 0` on the index, and treat that as a documented dev-only choice, not a default, since it means zero redundancy.
+Consequence: a fresh single-node cluster, using an index's default settings (1 replica), will have its replica shards sitting **unassigned** — there's nowhere valid to put them. Cluster health reports **yellow**, not green (not broken — just not fully redundant). Fix for a single-node dev cluster: explicitly set `number_of_replicas: 0` on the index, and treat that as a documented dev-only choice, not a default, since it means zero redundancy.  
+More on that in the [hands-on section](#hands-on-creating-an-index-and-watching-the-replica-rule-happen).
 
 Replica shards are also *not* like an AWS RDS read-replica in one respect: RDS read-replicas lag asynchronously, while Elasticsearch keeps replica shards in near-lockstep — writes replicate to replicas as part of the same indexing operation, not on a separate lag.
 
@@ -52,15 +53,46 @@ Key settings and why each one is there:
 With the cluster up, we logged into Kibana UI on [http://localhost:5601/](http://localhost:5601/).
 There go to Management → Dev Tools, there's a console there for sending raw requests to Elasticsearch — this is the standard way people interact with ES day-to-day, alongside curl.
 
-Running `GET _cluster/health` first showed `status: green` with 28 active primary shards — these are Elasticsearch's own internal system indices, which are created with 0 replicas by default, so the replica-placement issue doesn't show up on them. More on that below.
+Running `GET _cluster/health` first showed `status: green` with 28 active primary shards — these are Elasticsearch's own internal system indices, which are created with 0 replicas by default, so the replica-placement issue doesn't show up on them. More on that [below](#where-the-original-28-shards-came-from).
 
 Creating a plain index with no explicit settings makes the rule visible:
 
 ```
 PUT test-logs
 ```
-
-`GET _cluster/health` right after that returned `status: yellow`, `active_primary_shards: 29`, `unassigned_shards: 1` — the new index's default replica (Elasticsearch creates every index with `number_of_replicas: 1` unless told otherwise) had nowhere valid to be placed, exactly as predicted by the placement rule above. Yellow here means "healthy but not redundant," not broken — the primary shard is active and the index is fully readable/writable.
+return:
+```json
+{
+  "acknowledged": true,
+  "shards_acknowledged": true,
+  "index": "test-logs"
+}
+```
+Then run
+```
+GET _cluster/health
+```
+return:
+```json
+{
+  "cluster_name": "docker-cluster",
+  "status": "yellow",
+  "timed_out": false,
+  "number_of_nodes": 1,
+  "number_of_data_nodes": 1,
+  "active_primary_shards": 29,
+  "active_shards": 29,
+  "relocating_shards": 0,
+  "initializing_shards": 0,
+  "unassigned_shards": 1,
+  "delayed_unassigned_shards": 0,
+  "number_of_pending_tasks": 0,
+  "number_of_in_flight_fetch": 0,
+  "task_max_waiting_in_queue_millis": 0,
+  "active_shards_percent_as_number": 96.66666666666667
+}
+```
+Look at `status: yellow`, `active_primary_shards: 29`, `unassigned_shards: 1` — the new index's default replica (Elasticsearch creates every index with `number_of_replicas: 1` unless told otherwise) had nowhere valid to be placed, exactly as predicted by the placement rule above. Yellow here means "healthy but not redundant," not broken — the primary shard is active and the index is fully readable/writable.
 
 Fix applied:
 
@@ -71,11 +103,16 @@ PUT test-logs/_settings
 }
 ```
 
-After that, `GET _cluster/health` returned `status: green`, `unassigned_shards: 0`. Worth noting *why* this setting can be changed on a live index with no downtime: `number_of_replicas` is a **dynamic** setting — changing it just tells Elasticsearch to stop wanting a copy it can't place (or to start wanting more copies). Contrast with `number_of_shards`, which is fixed at index-creation time, since it determines the very hash routing (`hash(document_id) % number_of_primary_shards`) that decides which primary shard owns each document — changing it after the fact would mean physically reorganizing where every document lives.
+After that, `GET _cluster/health` returned `status: green`, `unassigned_shards: 0`.  
+Worth noting *why* this setting can be changed on a live index with no downtime: `number_of_replicas` is a **dynamic** setting — changing it just tells Elasticsearch to stop wanting a copy it can't place (or to start wanting more copies). Contrast with `number_of_shards`, which is fixed at index-creation time, since it determines the very hash routing (`hash(document_id) % number_of_primary_shards`) that decides which primary shard owns each document — changing it after the fact would mean physically reorganizing where every document lives.
 
 One subtlety confirmed hands-on: setting `number_of_replicas: 0` doesn't mean "no replica exists *yet*" — it means "this index is configured to want zero replicas." Adding a second node to the cluster later would **not** retroactively cause a replica for `test-logs` to appear; only explicitly raising `number_of_replicas` again would make Elasticsearch start placing one.
 
 Inspected in Kibana's UI (Menu → Stack Management → Index Management → `test-logs`): 1 primary shard, 0 replicas, 0 docs, matching the Dev Tools output exactly — the UI is just a view over the same cluster state.
+<div align="center">
+  <img src="./images/session1-1.png" width="1000">
+</div>
+
 
 ## Where the original 28 shards came from
 

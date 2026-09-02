@@ -22,6 +22,7 @@ If any of this isn't already clear from the conversation, ask before drafting �
 - **Sessions are dependencies, not modules.** Each session's deliverable feeds the next one. If a session could be deleted or reordered without breaking anything downstream, the sequencing isn't doing its job. A side project spun off for a subject that doesn't fit the main line is the exception — it doesn't need to feed the main project's chain, but it should still say up front why it's a detour.
 - **Theory → hands-on → deep-dive theory → hands-on, every session.** Start with just enough background to know what's about to be built and why — not a full lecture. Move quickly into real hands-on work; don't over-explain before letting the learner touch it. Then return to theory, deeper this time — mechanisms, edge cases, why it works the way it does — now that the hands-on work gives it something to anchor to. Close with more hands-on that applies the deeper theory. Skipping straight from a wall of concepts into tasks, or leaving out the second theory pass, isn't this pattern.
 - **Explicit over implicit**, in both the project's own conventions (e.g. explicit config over relying on defaults) and in the curriculum itself — spell out what a session's theory passes should actually cover, don't just say "explain the basics."
+- **Verify version-specific syntax against current docs, not just trained knowledge.** When a concept or task depends on exact API/config syntax that changes across versions, use a documentation-lookup MCP (e.g. `context7`, if available) to check current syntax rather than trusting memory alone.
 - **Scope stretch material out.** Advanced/production concerns (scaling, security hardening, performance tuning) belong in an optional stretch section at the end, not folded into early sessions where they'd bury the fundamentals.
 
 ## File structure
@@ -48,6 +49,8 @@ Produce a single markdown file with this shape:
 ## After writing
 
 Offer to write or update the project's `CLAUDE.md` with a short pointer to the curriculum file (what it's for, the teach-first instruction, where to resume from). `CLAUDE.md` loads automatically every Claude Code session; the curriculum file doesn't, unless something points to it. Without that pointer the learner has to ask for it to be read every time, which defeats a lot of the point.
+
+While doing this, check whether a documentation-lookup MCP (e.g. `context7`) is installed. If not, suggest the user install it before starting the curriculum's sessions — per the design principle above, sessions use it to verify version-specific API/config syntax rather than relying on trained knowledge alone. If it is installed, add the same note to `CLAUDE.md` that this project's own file uses (a short "Tools" section pointing at it) so every session picks it up automatically.
 
 ## What to leave out
 

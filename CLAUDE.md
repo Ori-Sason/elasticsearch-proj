@@ -11,6 +11,10 @@ This project exists to learn Elasticsearch hands-on by building a small log sear
 - At the start of a session, check which task checkboxes in `learning-notes/elasticsearch-curriculum.md` are already ticked to figure out where we left off, rather than asking to be told.
 - As tasks are completed, check them off directly in `learning-notes/elasticsearch-curriculum.md` (`[ ]` → `[x]`), so progress persists across sessions.
 
+## Tools
+
+- The `context7` MCP is available for pulling current, version-specific Elasticsearch documentation and code examples straight from source. Use it when explaining or writing exact API/query-DSL/mapping/config syntax, rather than relying on trained knowledge — Elasticsearch syntax drifts across versions and this project's convention of explicit (never dynamic) mappings makes exact syntax matter.
+
 ## Conventions
 
 - Mappings are explicit, never left to dynamic mapping.

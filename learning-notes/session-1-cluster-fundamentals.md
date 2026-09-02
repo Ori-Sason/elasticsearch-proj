@@ -1,66 +1,59 @@
-# Session 1 — Cluster fundamentals notes
+# Session 1 — Cluster fundamentals
 
-Concepts covered while working through Session 1 (standing up the cluster).
+## TL;DR
 
-## Core concepts: node, cluster, index, document, shard
+Stood up a single-node Elasticsearch + Kibana cluster with Docker Compose, checked its health, created a test index by hand, and watched it go yellow until we told it not to expect a replica it had nowhere to place. Covered what a node, cluster, index, document, and shard actually are, and traced where the cluster's 28 starting shards came from.
 
-- **Document** — the basic unit of data, a single JSON object. Analogous to a row in a relational table, or a document in MongoDB.
-- **Index** — a named collection of documents sharing a mapping. Analogous to a table, or a MongoDB collection.
-- **Node** — a single running Elasticsearch process (one JVM). It stores data and handles requests.
-- **Cluster** — one or more nodes working together as one logical system. A single-node setup is technically a "cluster of one."
-- **Shard** — an index isn't stored as one blob; it's split into shards, each a self-contained Lucene index. Shards are the actual unit Elasticsearch distributes across nodes.
-  - **Primary shard** — holds the real data, one of N pieces the index is split into.
-  - **Replica shard** — a copy of a primary shard, for fault tolerance and read scaling.
+## What we covered
 
-## Replica placement is a hard rule, not a performance tweak
+- **Document** — one record, a single JSON object. Same idea as a row in a SQL table or a document in MongoDB, though unlike a SQL row it has no fixed schema unless one is explicitly defined (that's the mapping — covered in Session 2).
 
-A replica shard is **never** allowed to live on the same node as its primary — this is enforced by Elasticsearch's shard allocator. The reason: a replica's entire purpose is fault tolerance (if the node, a process, holding the primary dies, the data still exists elsewhere). A replica on the same node as its primary would provide zero protection, so Elasticsearch won't place one there.
+- **Index** — a named collection of documents that share a mapping. Same idea as a table, or a MongoDB collection. The analogy breaks down at the storage layer: a SQL table is one physical structure, but an index is never stored as a single blob — it's always split into shards from the moment it's created.
 
-Consequence: a fresh single-node cluster, using an index's default settings (1 replica), will have its replica shards sitting **unassigned** — there's nowhere valid to put them. Cluster health reports **yellow**, not green (not broken — just not fully redundant). Fix for a single-node dev cluster: explicitly set `number_of_replicas: 0` on the index, and treat that as a documented dev-only choice, not a default, since it means zero redundancy.  
-More on that in the [hands-on section](#hands-on-creating-an-index-and-watching-the-replica-rule-happen).
+- **Node** — one running Elasticsearch process (one JVM). It stores data and serves requests. Nothing more exotic than any other server process — just this one happens to speak the Elasticsearch protocol.
 
-Replica shards are also *not* like an AWS RDS read-replica in one respect: RDS read-replicas lag asynchronously, while Elasticsearch keeps replica shards in near-lockstep — writes replicate to replicas as part of the same indexing operation, not on a separate lag.
+- **Cluster** — one or more nodes working together as one logical system, sharing cluster state (which indices exist, which shards live where, etc.). A single-node setup is technically "a cluster of one," which is why a fresh single-node deployment still reports a `cluster_name` and has cluster-level health.
 
-## Request routing (I've asked about "orchestrator")
+- **Shard** — an index is split into shards, and shards, not indices, are the actual unit Elasticsearch distributes across nodes. Each is a self-contained Lucene index under the hood. Two roles:
+  - **Primary** — holds the authoritative copy of a slice of the index's documents.
+  - **Replica** — a live copy of a primary, kept for fault tolerance and to spread out read load. Not a snapshot taken periodically — every write is applied to the replica as part of the same indexing operation, so it never falls behind the way an async read-replica would.
 
-There's no separate orchestrator process. Any node can act as the **coordinating node** for a given request — whichever node a client happens to talk to plays that role for that one request.
+**Replica placement is a hard allocator rule, not a resource or performance setting.** A replica shard is never allowed to live on the same node as its primary — Elasticsearch's shard allocator enforces this unconditionally. The reasoning is pure fault tolerance: a replica exists so that if the node holding the primary dies, the data survives elsewhere. A replica sitting on the same node as its primary would die with it, providing zero protection, so the allocator refuses to place one there — no exceptions.
 
-- **Writes**: which primary shard owns a document is deterministic — `hash(document_id) % number_of_primary_shards`. Every write for a given document always routes to the same primary shard, which processes it and then forwards to its replicas. Since a specific document is always handled by exactly one primary, there's no race between primaries over the same document — this is how Elasticsearch avoids needing a traditional lock manager. There are no cross-document transactions.
-- **Reads**: the coordinating node can pick any copy of the relevant shard — primary or replica — often round-robin, to spread query load. This is the read-scaling benefit of replicas.
+Consequence for a single-node cluster: a normal index, created with its defaults (1 replica), will always have that replica stuck **unassigned**, because there's no second node to host it. Cluster health reports **yellow**, not green — not broken, just not redundant. The dev fix (used here) is to explicitly set `number_of_replicas: 0` on the index and treat that as a deliberate, documented "no redundancy" choice for local development, not a default to carry into anything real.
 
-In larger clusters nodes can specialize (data nodes, master-eligible nodes managing cluster state, coordinating-only nodes); on a single-node dev cluster every role collapses onto the one node.
+One place the AWS RDS read-replica analogy breaks: RDS read replicas replicate asynchronously and can lag behind the primary by some interval. Elasticsearch doesn't work that way — a write isn't considered acknowledged until it's been applied to all in-sync replicas too, so replicas stay in lockstep with the primary rather than trailing it.
 
-## Why Elasticsearch is fast (and why it's not "in-memory" like Redis)
+**There's no separate "orchestrator" process — any node can act as the coordinating node** for a given request, meaning whichever node the client happens to talk to plays that role for that one request. Writes and reads are routed differently:
+- **Writes**: which primary shard owns a given document is deterministic — `hash(document_id) % number_of_primary_shards`. Every write for a specific document ID always lands on the same primary shard, which processes it and then forwards the write to its replicas. Because a document is always owned by exactly one primary, two primaries can never race over the same document — this is how Elasticsearch avoids needing a traditional lock manager. There are no cross-document transactions, which is the trade-off for that simplicity.
+- **Reads**: the coordinating node can serve the request from any copy of the relevant shard — primary or replica — typically round-robin, which is the actual point of having replicas: spreading out query load, not just safety.
 
-Redis is fundamentally in-memory — the dataset must fit in RAM. Elasticsearch is different: data lives on disk in Lucene segment files, and is not required to fit in RAM. Speed comes from two separate things:
+On a larger cluster, nodes can specialize (dedicated data nodes, master-eligible nodes that manage cluster state, coordinating-only nodes that just route traffic); on this single-node dev cluster every one of those roles collapses onto the one node.
 
-1. The inverted index is an algorithmically better structure for text search (lookup instead of scan) — true even with zero caching.
-2. The OS page cache does a lot of the "feels like memory" work. Elasticsearch deliberately keeps its JVM heap small (commonly capped around 50% of available RAM) so the rest of RAM is free for the OS to cache the actual Lucene segment files being read from disk. Some structures (like the term dictionary) are also memory-mapped.
+**Elasticsearch is not an in-memory store like Redis.** Redis requires its entire dataset to fit in RAM. Elasticsearch's data lives on disk in Lucene segment files and is never required to fit in memory. Speed comes from two separate mechanisms, not from keeping everything resident in RAM:
+1. The **inverted index** — a lookup table mapping each term to the documents containing it — is an algorithmically better structure for text search than a linear scan, true even with zero caching involved.
+2. The OS **page cache** does most of the "feels like memory" work: Elasticsearch deliberately caps its JVM heap small (commonly around 50% of available RAM) precisely so the rest of RAM is left free for the operating system to cache the Lucene segment files being read from disk. Some structures (like the term dictionary) are also memory-mapped directly.
 
-So it's closer to "a well-cached disk-backed index" than "an in-memory store." Durability is also stronger by default than a plain in-memory store: writes go through a write-ahead log (the **translog**) covering the window between a write and the periodic flush to disk.
+So it's closer to "a disk-backed index that's very well cached by the OS" than "an in-memory store." Durability is also stronger by default than a plain in-memory store: every write goes through a write-ahead log (the **translog**) covering the window between the write and the next periodic flush to disk, so a crash between flushes doesn't lose acknowledged writes.
 
-## The `docker-compose.yaml` for Session 1
+## What we did
 
-Key settings and why each one is there:
+Wrote [`/docker-compose.yaml`](/docker-compose.yaml) for a single-node Elasticsearch + Kibana stack. Key settings and why each is there:
+- `discovery.type=single-node` — normally nodes discover each other and elect a master via quorum vote; with one node that process doesn't apply, so this tells Elasticsearch to self-elect as master immediately instead of waiting for peers that will never show up.
+- `xpack.security.enabled=false` — disables auth/TLS between client and Elasticsearch. Explicitly a dev-only shortcut, called out as such rather than left implicit — a real deployment needs this on (a stretch-goal task in the curriculum revisits it).
+- `ES_JAVA_OPTS=-Xms512m -Xmx512m` — an explicit, fixed JVM heap size rather than letting Elasticsearch auto-size it, consistent with the project's "config explicit over defaulted" convention and with wanting RAM left over for the OS page cache (see the Redis comparison above).
+- A named volume for the Elasticsearch data directory, so `docker compose down` doesn't wipe the index.
 
-- `discovery.type=single-node` — normally nodes discover each other and elect a master via quorum vote; with one node that doesn't apply, so this tells Elasticsearch to self-elect as master immediately rather than sit waiting for peers that don't exist.
-- `xpack.security.enabled=false` — disables auth/TLS between client and Elasticsearch. Explicitly a dev-only shortcut; a real deployment needs this on (this is what the curriculum's Stretch "basic security" task revisits).
-- Explicit JVM heap size (`ES_JAVA_OPTS=-Xms512m -Xmx512m`) — keeps the heap bounded and explicit rather than auto-sized, consistent with the project's "config explicit over defaulted" convention, and consistent with wanting RAM left over for OS page cache.
-- A named volume for the Elasticsearch data directory — without it, `docker compose down` would wipe the index.
+Logged into Kibana at [http://localhost:5601/](http://localhost:5601/) and used Dev Tools (Management → Dev Tools) — a console built into Kibana for sending raw HTTP requests to Elasticsearch, the same way `curl` would, just with syntax highlighting and history.
 
-## Hands-on: creating an index and watching the replica rule happen
+Ran `GET _cluster/health` first, before creating anything: `status: green`, `active_primary_shards: 28`. That's 28 shards that existed before any user index was created — turned out to be Elasticsearch's own internal system indices, explained in [Questions I had](#questions-i-had) below.
 
-With the cluster up, we logged into Kibana UI on [http://localhost:5601/](http://localhost:5601/).
-There go to Management → Dev Tools, there's a console there for sending raw requests to Elasticsearch — this is the standard way people interact with ES day-to-day, alongside curl.
-
-Running `GET _cluster/health` first showed `status: green` with 28 active primary shards — these are Elasticsearch's own internal system indices, which are created with 0 replicas by default, so the replica-placement issue doesn't show up on them. More on that [below](#where-the-original-28-shards-came-from).
-
-Creating a plain index with no explicit settings makes the rule visible:
+Created a plain index with no explicit settings:
 
 ```
 PUT test-logs
 ```
-return:
+returned:
 ```json
 {
   "acknowledged": true,
@@ -68,11 +61,9 @@ return:
   "index": "test-logs"
 }
 ```
-Then run
-```
-GET _cluster/health
-```
-return:
+
+Then `GET _cluster/health` again:
+
 ```json
 {
   "cluster_name": "docker-cluster",
@@ -92,7 +83,8 @@ return:
   "active_shards_percent_as_number": 96.66666666666667
 }
 ```
-Look at `status: yellow`, `active_primary_shards: 29`, `unassigned_shards: 1` — the new index's default replica (Elasticsearch creates every index with `number_of_replicas: 1` unless told otherwise) had nowhere valid to be placed, exactly as predicted by the placement rule above. Yellow here means "healthy but not redundant," not broken — the primary shard is active and the index is fully readable/writable.
+
+`status: yellow`, `active_primary_shards: 29`, `unassigned_shards: 1` — exactly the replica-placement rule from above showing up live. `test-logs` was created with Elasticsearch's default `number_of_replicas: 1`, and that replica had nowhere valid to go on a single-node cluster. Yellow here specifically means "healthy but not redundant, not broken" — the primary shard is active, so the index is fully readable and writable the whole time.
 
 Fix applied:
 
@@ -103,24 +95,26 @@ PUT test-logs/_settings
 }
 ```
 
-After that, `GET _cluster/health` returned `status: green`, `unassigned_shards: 0`.  
-Worth noting *why* this setting can be changed on a live index with no downtime: `number_of_replicas` is a **dynamic** setting — changing it just tells Elasticsearch to stop wanting a copy it can't place (or to start wanting more copies). Contrast with `number_of_shards`, which is fixed at index-creation time, since it determines the very hash routing (`hash(document_id) % number_of_primary_shards`) that decides which primary shard owns each document — changing it after the fact would mean physically reorganizing where every document lives.
+After that, `GET _cluster/health` returned `status: green`, `unassigned_shards: 0`.
 
-One subtlety confirmed hands-on: setting `number_of_replicas: 0` doesn't mean "no replica exists *yet*" — it means "this index is configured to want zero replicas." Adding a second node to the cluster later would **not** retroactively cause a replica for `test-logs` to appear; only explicitly raising `number_of_replicas` again would make Elasticsearch start placing one.
+Worth noting *why* this can be changed on a live index with zero downtime: `number_of_replicas` is a **dynamic** setting — changing it just tells Elasticsearch to stop wanting a copy it can't place (or to start wanting more). Contrast with `number_of_shards`, which is fixed permanently at index-creation time, because it determines the very hash routing (`hash(document_id) % number_of_primary_shards`) that decides which primary shard owns each document — changing that after the fact would mean physically relocating every document in the index.
 
-Inspected in Kibana's UI (Menu → Stack Management → Index Management → `test-logs`): 1 primary shard, 0 replicas, 0 docs, matching the Dev Tools output exactly — the UI is just a view over the same cluster state.
+One subtlety confirmed hands-on: setting `number_of_replicas: 0` doesn't mean "no replica exists *yet*" — it means "this index is configured to want zero replicas." Adding a second node to the cluster later would **not** retroactively cause a replica for `test-logs` to appear on its own; only explicitly raising `number_of_replicas` again would make Elasticsearch start placing one.
+
+Inspected the result in Kibana's UI (Menu → Stack Management → Index Management → `test-logs`): 1 primary shard, 0 replicas, 0 docs, matching the Dev Tools output exactly — the UI is just a view over the same cluster state, not a separate source of truth.
+
 <div align="center">
-  <img src="./images/session1-1.png" width="1000">
+  <img src="/learning-notes/images/session1-1.png" width="1000">
 </div>
 
+## Questions I had
 
-## Where the original 28 shards came from
+**Where did the original 28 shards come from?**
 
 `GET _cat/indices?v` and `GET _cat/shards?v` show what those first 28 shards actually were: indices named `.kibana_8.15.0_001`, `.kibana_task_manager_8.15.0_001`, `.internal.alerts-*`, `.apm-agent-configuration`, `.slo-observability.*`, and similar — all created by **Kibana**, the moment it first connected to the empty cluster and initialized itself.
 
 Kibana isn't a separate database with its own storage — it's itself just another Elasticsearch client. All of its own application state (dashboards, saved searches, alerting rule definitions, background task scheduling, ILM history, per-feature config for APM/ML/security/observability/SLO, even for features never touched) is stored as ordinary documents in ordinary Elasticsearch indices. The instant Kibana boots against a fresh cluster, it bootstraps dozens of these indices to hold its own metadata — that's the 28 shards present before any user index was created.
 
 Two conventions visible in that output:
-
-- A **leading dot** (`.kibana...`, `.internal...`) marks a system index — internal plumbing, not user data. These are hidden from normal index listings and excluded from wildcard patterns like `GET */_search` by default, so user queries don't accidentally sweep them in.
+- A **leading dot** (`.kibana...`, `.internal...`) marks a system index — internal plumbing, not user data. These are hidden from normal index listings and excluded from wildcard patterns like `GET */_search` by default, so ordinary queries don't accidentally sweep them in.
 - Every one of them has `rep` (replicas) = **0**, which is why the cluster started `green` rather than `yellow` before anything was touched. Elasticsearch's defaults deliberately set these system indices to 0 replicas out of the box (low-stakes, easily regenerated metadata), unlike the `number_of_replicas: 1` default a plain user-created index like `test-logs` gets.

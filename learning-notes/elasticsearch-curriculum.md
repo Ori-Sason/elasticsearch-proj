@@ -55,7 +55,7 @@ No Kibana dashboards, no cluster scaling, no security hardening in this version 
 
 **Deep dive:** now that a real index exists, go deeper on shards — what a shard actually is (a self-contained Lucene index), why data gets split into shards at all (parallelism, scaling beyond one node's disk/memory), what a replica actually protects against and why a single-node cluster can't allocate any (no second node to put it on), and what the cluster health colors (green/yellow/red) really mean underneath. This should set up why adding a second node later would immediately change shard allocation.
 
-- [ ] Closing hands-on: inspect shard allocation via `GET _cat/shards`, then create a second index that requests one replica and observe the cluster turn yellow — explain why, using what you just learned
+- [x] Closing hands-on: inspect shard allocation via `GET _cat/shards`, then create a second index that requests one replica and observe the cluster turn yellow — explain why, using what you just learned
 
 **Deliverable:** a running cluster you can hit at `localhost:9200`, and a Kibana instance you can reach in the browser.
 

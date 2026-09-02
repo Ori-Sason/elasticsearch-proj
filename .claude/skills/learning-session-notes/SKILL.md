@@ -41,6 +41,8 @@ Skip a section only if it has nothing worth keeping (other than the Title and TL
 - Don't include troubleshooting/debugging blow-by-blow unless the user asks for it, or the dead end actually changed a real decision.
 - Don't duplicate full file contents that already live in the repo (a whole `docker-compose.yaml`, a whole script) — quote and explain the parts worth explaining, link to the file for the rest.
 - Don't editorialize about how the session went — just the content.
+- Don't narrate the session as a back-and-forth recap ("asked to explain X, the answer given was...", "the user then confirmed..."). Write the underlying fact or mechanism directly as informational content instead — check whether it's already covered elsewhere in the note first, and only add it if it isn't, rather than restating it as a story of the exchange.
+- Don't add meta commentary about the session itself ("this closes out Session N", "that wraps up...") — progress is tracked via the curriculum checkboxes, not narrated in the note.
 
 ## After writing
 

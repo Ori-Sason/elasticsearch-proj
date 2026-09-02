@@ -104,8 +104,43 @@ One subtlety confirmed hands-on: setting `number_of_replicas: 0` doesn't mean "n
 Inspected the result in Kibana's UI (Menu → Stack Management → Index Management → `test-logs`): 1 primary shard, 0 replicas, 0 docs, matching the Dev Tools output exactly — the UI is just a view over the same cluster state, not a separate source of truth.
 
 <div align="center">
-  <img src="/learning-notes/images/session1-1.png" width="1000">
+  <img src="images/session1-1.png" width="1000">
 </div>
+
+### Closing hands-on: watching the replica-placement rule fire live
+
+Ran `GET _cat/shards?v` to see shard allocation directly rather than through `_cluster/health`'s aggregate counts. `_cat/shards` lists one row per shard: which index it belongs to, `prirep` (`p` for primary, `r` for replica), its state, doc count, size, and which node IP/name it's assigned to. For `test-logs` this returned exactly one row — `p`, `STARTED`, assigned to the single node — and no `r` row at all, because `number_of_replicas` had already been set to `0` on that index at the end of the earlier hands-on. No replica wanted, none shown.
+
+<div align="center">
+  <img src="images/session1-2.png">
+</div>
+
+To see the allocator actually refuse a placement rather than just reason about it, created a second index that explicitly asks for a replica:
+
+```
+PUT session1-replica-test
+{
+  "settings": {
+    "number_of_replicas": 1
+  }
+}
+```
+
+`1` is also Elasticsearch's out-of-the-box default for a plain `PUT <index>` with no settings block — writing it explicitly here just makes the intent visible rather than relying on an implicit default.
+
+`GET _cluster/health` right after came back `status: yellow`, `active_primary_shards: 30`, `unassigned_shards: 1` — one more primary than before (the new index's own primary, which allocated fine), and exactly one shard the allocator can't place, matching the replica it was just asked for.
+
+Then `GET _cat/shards?v&index=session1-replica-test` made that concrete at the row level:
+
+```
+index                  shard prirep state      docs store dataset ip         node
+session1-replica-test 0     p      STARTED       0  227b    227b 172.18.0.2 521b730fdb97
+session1-replica-test 0     r      UNASSIGNED
+```
+
+The `p` row looks like any other started shard — assigned to the node, with a real IP and node name. The `r` row is `UNASSIGNED` with every placement column blank: no IP, no node. That blank is the allocator's refusal made visible — it evaluated the "never place a replica on the same node as its primary" rule (see [What we covered](#what-we-covered) above) and left the replica homeless rather than break it. This is the identical situation `test-logs` would have been in if its replica count had been left at the default `1` instead of explicitly zeroed out.
+
+Cleaned up afterward with `DELETE session1-replica-test` — it existed only to trigger this demonstration, not as project state to carry forward.
 
 ## Questions I had
 

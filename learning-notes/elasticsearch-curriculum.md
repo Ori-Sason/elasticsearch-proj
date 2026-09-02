@@ -88,14 +88,14 @@ No Kibana dashboards, no cluster scaling, no security hardening in this version 
 **Concepts to cover before the tasks:** what a query is at a basic level (a JSON request describing what you're looking for) and the high-level difference between matching on free text (`match`) versus an exact value (`term`) — just enough to run the first queries. The scoring mechanics come in the deep dive, once there are real query results to look at.
 
 **Tasks:**
-- [ ] Run a `match` query against the `message` field
-- [ ] Run a `term` query filtering on an exact field like `level` (understand why this needs a `keyword` field, not `text`)
-- [ ] Combine both in a `bool` query using `must` and `filter` — and be able to explain the difference between them (scoring vs no scoring)
-- [ ] Add sorting and pagination (`from`/`size`, or `search_after` for larger result sets)
+- [x] Run a `match` query against the `message` field
+- [x] Run a `term` query filtering on an exact field like `level` (understand why this needs a `keyword` field, not `text`)
+- [x] Combine both in a `bool` query using `must` and `filter` — and be able to explain the difference between them (scoring vs no scoring)
+- [x] Add sorting and pagination (`from`/`size`, or `search_after` for larger result sets)
 
 **Deep dive:** now that there are real scored results on screen, go deeper on how that score was actually computed — the inverted index as the data structure making full-text search fast, and relevance scoring via BM25 (term frequency, inverse document frequency, field-length normalization, in plain terms). Then unpack query context vs filter context properly: why a filter can be cached as a bitset and skip scoring entirely, why that makes `filter` faster than an equivalent `must`, and when you'd deliberately still want `must` for its scoring even when filtering would work.
 
-- [ ] Closing hands-on: run the same query through `GET <index>/_explain/<doc_id>` (or the `explain` search parameter) to see the actual BM25 score breakdown for one result, and rewrite one `must` clause as `filter` to confirm the result set doesn't change but the score does
+- [x] Closing hands-on: run the same query through `GET <index>/_explain/<doc_id>` (or the `explain` search parameter) to see the actual BM25 score breakdown for one result, and rewrite one `must` clause as `filter` to confirm the result set doesn't change but the score does
 
 **Deliverable:** a handful of saved queries (in Kibana Dev Tools or a `.http`/`.md` scratch file) covering match, term, bool, sort, and pagination against the session 2 dataset.
 

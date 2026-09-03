@@ -2,17 +2,57 @@
 
 ## TL;DR
 
-Learned the Query DSL against the `logs-app` dataset: `match` (analyzed, free-text) vs `term` (exact, unanalyzed) queries, combining conditions with `bool`'s `must` vs `filter` clauses, and sorting/pagination via `from`/`size`. Went deep on why pagination cost scales with `from + size` (per-shard bounded heap, coordinator merge), then used `_explain` to see BM25 relevance scoring broken into its real formula components, and confirmed hands-on that rewriting a `must` clause as `filter` keeps the same result set but drops scoring entirely.
+Learned the Query DSL against the `logs-app` dataset: `match` (analyzed, free-text) vs `term` (exact, unanalyzed), and `bool` for combining conditions via `must` (scores) vs `filter` (yes/no, cacheable). Went deep on why deep pagination (`from`) gets expensive — a per-shard bounded heap, not a full scan — and used `_explain` to see BM25 relevance scoring broken into its real formula pieces. Confirmed hands-on that moving a clause from `must` to `filter` returns the exact same documents but drops scoring entirely.
 
-## `match` vs `term`
+## Request lifecycle
 
-A query in Elasticsearch is a JSON document describing what to search for, sent to a search endpoint.
+Every query this session flows through the same pipeline, just with different pieces lighting up depending on what you send.
 
-**`match`** is for free-text search: it runs the query string through the same analyzer the target field used at index time, then looks for documents containing those tokens — this is why a `match` query against `message` (a `text` field, see [session 2](/learning-notes/session-2-model-and-load-data.md)) can find `"connection"` inside `"retrying connection, attempt 39"` even though the input and the stored value aren't identical strings.
+```
+                    GET logs-app/_search
+                            │
+                            ▼
+                 ┌────────────────────┐
+                 │   Query DSL body   │  match / term / bool
+                 └──────────┬─────────┘
+                            │  broadcast to every shard
+              ┌─────────────┼──────────────┐
+              ▼             ▼              ▼
+          Shard 1         Shard 2        Shard 3
+       (each one independently):
+         - "must" clauses  → BM25 score
+         - "filter" clauses → yes/no bitset (cacheable, no score)
+         - streaming top-K heap, size K = from + size
+              └────────────┼──────────────┘
+                           ▼
+                Coordinating node merges
+             num_shards × K candidates, re-sorts,
+             returns hits[from : from+size]
+```
 
-**`term`** is for exact-value matching: no analysis happens, the input is compared byte-for-byte against the stored value. This is why `term` needs a `keyword` field, not `text` — a `text` field never stores the original string as one token, only the analyzer's output tokens, so a `term` query for a whole phrase or the original casing almost never matches anything in a `text` field. The one exception: a single word that's already lowercase with no punctuation analyzes to itself unchanged, so a `term` query for that exact word would match by coincidence. The moment the original value is multi-word, mixed-case, or has punctuation, the stored tokens diverge from the original string and `term` stops matching.
+`logs-app` runs on a single primary shard in this cluster, so the "merge across shards" step collapses to one shard talking to itself — but the mechanism is identical, it's just not visible with only one shard.
 
-By default `match` on multi-word input is an OR across the resulting tokens (any token matching is enough, more matching tokens just score higher) — requiring *all* conditions to hold at once is what `bool` is for, covered next.
+## Walkthrough
+
+### `match` vs `term`: analyzed search vs. exact match
+
+A query is just a JSON document you POST to a search endpoint describing what you want.
+
+Think of `match` like typing into a search box. It doesn't care about your exact wording — it breaks your input into tokens and looks for documents containing those tokens. Think of `term` like scanning a spreadsheet column for one exact cell value. No fuzziness, no interpretation, byte-for-byte comparison.
+
+`match` runs your input through the same analyzer the target field used at index time. That's why a `match` query against `message` (a `text` field, see [session 2](/learning-notes/session-2-model-and-load-data.md)) finds `"connection"` inside `"retrying connection, attempt 39"` — the query string and the stored value aren't identical text, but they tokenize the same way.
+
+`term` skips analysis entirely, so it needs a `keyword` field, not `text`. A `text` field never stores the original string as one token, only the analyzer's chopped-up output — so a `term` query for a whole phrase or the original casing almost never matches anything in a `text` field.  
+There's one coincidence worth knowing: a single word that's already lowercase with no punctuation analyzes to itself, unchanged. A `term` query for that one word can match a `text` field by accident. The moment the value is multi-word, mixed-case, or has punctuation, that coincidence breaks and `term` stops matching.
+
+| | `match` | `term` |
+|---|---|---|
+| Runs the analyzer | Yes | No |
+| Compares against | Analyzed tokens | Raw stored value, byte-for-byte |
+| Target field type | `text` (usually) | `keyword` (usually) |
+| Multi-word input | OR across tokens by default | Exact whole-value match only |
+
+**Bottom line:** by default, `match` on multi-word input is an OR across the resulting tokens — any token matching is enough, and more matching tokens just push the score higher. Requiring *all* conditions at once is what `bool` is for, next topic.
 
 **Hands-on:** ran a `match` query against `message`:
 
@@ -25,9 +65,9 @@ GET logs-app/_search
 }
 ```
 
-returned `hits.total.value: 0` — not a bug, a real fact about the dataset. Checking [`generate_logs.py`](/scripts/generate_logs.py)'s `MESSAGES` templates, the literal token `timeout` never appears; the closest is `"database query timed out after {ms}ms"`, which tokenizes to `timed`, `out`, `after`, ... — separate tokens, not `timeout`. `match` matches exact analyzed tokens, no stemming or synonyms by default, so `timed` ≠ `timeout`.
+Zero hits — not a bug, a real fact about the dataset. [`generate_logs.py`](/scripts/generate_logs.py)'s `MESSAGES` templates never contain the literal token `timeout`. The closest is `"database query timed out after {ms}ms"`, which tokenizes to `timed`, `out`, `after`... — separate tokens, not `timeout`. `match` matches exact analyzed tokens, no stemming and no synonyms by default, so `timed` ≠ `timeout`.
 
-Same query for `"connection"` returned 274 hits, all from the one template that contains that word — the `DEBUG`-level `"retrying connection, attempt {n}"`:
+Same query for `"connection"` returned 274 hits, all from the one `DEBUG`-level template that actually contains that word:
 
 ```json
 {
@@ -51,7 +91,7 @@ Same query for `"connection"` returned 274 hits, all from the one template that 
 }
 ```
 
-Every single hit had the identical `_score` of `3.0687466` — worth noting now, explained properly in the BM25 section below: same token, same term frequency (1), same field length (4 tokens) every time, so same score every time.
+Every hit had the identical `_score` of `3.0687466`. Same token, same term frequency (1), same field length (4 tokens), every time — so same score every time. The BM25 section below explains why that's exactly what the formula predicts.
 
 Then ran a `term` query on the `keyword` field `level`:
 
@@ -64,7 +104,7 @@ GET logs-app/_search
 }
 ```
 
-The generator's `ERROR` weight (`5` out of `100` total, from [`generate_logs.py`](/scripts/generate_logs.py)'s `LEVEL_WEIGHTS`) predicts roughly 5% of 5,000 documents ≈ 250 `ERROR`-level logs. The query returned 242 — within normal sampling variance for `random.choices`-driven weighted selection:
+The generator weights `ERROR` at 5 out of 100 (`LEVEL_WEIGHTS` in [`generate_logs.py`](/scripts/generate_logs.py)), so roughly 5% of 5,000 documents should land here — about 250. The query returned 242, well within normal sampling variance for `random.choices`-driven weighted selection:
 
 ```json
 {
@@ -86,9 +126,13 @@ The generator's `ERROR` weight (`5` out of `100` total, from [`generate_logs.py`
 }
 ```
 
-## `bool`: `must` vs `filter`
+### `bool`: `must` vs `filter`
 
-`bool` combines multiple conditions, but its clauses aren't interchangeable — `must` and `filter` both require the condition to match, but only `must` contributes to `_score`. `filter` is a pure yes/no gate that contributes nothing to relevance scoring. For a deterministic condition (like an exact `term` match), the *result set* is identical whichever clause it's in — what differs is the score, and (see the query-vs-filter-context section below) the performance characteristics.
+`bool` combines multiple conditions, but its clauses aren't interchangeable — even though both require the condition to hold true.
+
+A useful mental model: `must` is a judge scoring a contest entry — the entry has to qualify, and *how well* it qualifies affects the score. `filter` is a bouncer checking ID at the door — you're either on the list or you're not, and nothing about *how* you're on the list makes you more or less welcome once you're in.
+
+Only `must` contributes to `_score`. `filter` is a pure yes/no gate that contributes nothing to relevance. For a deterministic condition — an exact `term` match, say — the *result set* comes out identical whichever clause it sits in. What differs is the score, and, as the "Query context vs filter context" section below covers, the performance characteristics.
 
 **Hands-on:** combined the two earlier queries — free-text on `message`, exact filter on `level`:
 
@@ -108,7 +152,7 @@ GET logs-app/_search
 }
 ```
 
-No document can satisfy both conditions simultaneously: the only message template containing `"connection"` is the `DEBUG`-level one, while `level: ERROR` is a hard filter. Running it confirms that directly:
+No document can satisfy both at once — the only message template containing `"connection"` is the `DEBUG`-level one, and `level: ERROR` is a hard filter. Running it confirms that directly:
 
 ```json
 {
@@ -119,9 +163,11 @@ No document can satisfy both conditions simultaneously: the only message templat
 }
 ```
 
-## Sorting and pagination
+**Bottom line:** use `must` when a condition should actually move the ranking. Use `filter` for anything that's just a hard yes/no gate.
 
-By default, results are sorted by `_score` descending. For log data you often want strict recency instead, regardless of relevance — that's what `sort` does; when a field-based sort is used, `_score` isn't computed by default (comes back `null`) since the ranking no longer depends on it. `from`/`size` then give you an offset-based page into the sorted results.
+### Sorting and pagination
+
+By default, results sort by `_score` descending. When will we want that? for example data log usually should be sorted by date, regardless of relevance — that's what `sort` is for. When you sort by a field, `_score` stops getting computed by default and comes back `null`, since the ranking no longer depends on it. `from`/`size` then give you an offset-based page into the sorted results.
 
 **Hands-on:**
 
@@ -139,7 +185,7 @@ GET logs-app/_search
 }
 ```
 
-returned the 5 most recent `ERROR` logs, ordered purely by `timestamp`, no `_score` involved:
+Returned the 5 most recent `ERROR` logs, ordered purely by `timestamp`, no `_score` involved:
 
 ```json
 {
@@ -163,29 +209,57 @@ returned the 5 most recent `ERROR` logs, ordered purely by `timestamp`, no `_sco
 }
 ```
 
-**Why deep pagination (a large `from`) gets expensive** — and specifically why this isn't a full-table-scan problem, and isn't about "the data being sorted on disk" either. Elasticsearch has no single physical sort order for an index the way a relational DB's clustering key gives one table one privileged order. Instead, every field gets its own **`doc_values`** — a columnar, per-field, per-document structure built at index time (distinct from the inverted index used for search) that answers "what's this field's value for document N" efficiently. Sorting (and later, aggregations — session 4) run over `doc_values`, not the inverted index, and every field's `doc_values` are equally cheap to sort by; there's no field that's privileged the way a clustering key is in a relational DB.
+**Why deep pagination (a large `from`) gets expensive.** This isn't a full-table-scan problem, and it's not about "the data being sorted on disk" either — Elasticsearch has no single physical sort order for an index at all, unlike a relational DB where a clustering key gives the table one privileged order. Instead, every field gets its own **`doc_values`**: a columnar, per-field, per-document structure built at index time, separate from the inverted index used for search, that answers "what's this field's value for document N" efficiently. Sorting — and later, aggregations in session 4 — runs over `doc_values`, not the inverted index. No field is privileged the way a clustering key is in a relational DB; every field's `doc_values` are equally cheap to sort by.
 
-Finding *which* documents match a query costs the same regardless of `from` — the posting-list walk for `level: ERROR` doesn't change size based on pagination depth. What actually changes is a separate step: each shard runs a streaming top-K algorithm, keeping a bounded max-heap (priority queue) of size `K = from + size` as it streams through matches, replacing the worst entry in the heap whenever a better-sorted document shows up. That's `O(N log K)`, not `O(N log N))` — the shard never fully sorts all N matches, only maintains a heap of size K. The real cost scaling with `from` shows up in two places downstream of that: (1) every shard has to ship its *entire* top-K — not just the final page — to the coordinating node, so network payload per shard scales with K, not with `size`; and (2) the coordinating node has to merge `num_shards × K` candidates and re-sort them to pick the final page, discarding everything before position `from`.
-
-Small worked example: 3 shards, `from: 20, size: 10` → `K = 30`. Each shard builds and ships a heap of 30 candidates (not 10). The coordinator receives `3 × 30 = 90` candidates total, sorts them, and returns documents 21–30 — throwing away the other 80 it just spent effort transferring and merging. Ask for `from: 0, size: 10` instead and each shard only ever builds/ships a heap of 10, and the coordinator merges just `3 × 10 = 30` candidates. (`logs-app` itself only has 1 primary shard, so this multi-shard merge collapses to a single heap in this cluster — the mechanism is the same either way, it's just not observable in a 1-shard index the way it would be in a larger cluster).
-
-This cost profile is exactly what `search_after` (not implemented this session, but worth knowing) is built to avoid — instead of "give me the top `from + size` so I can discard the first `from`," it takes a cursor (the sort values of the last-seen document) and asks for "whatever comes strictly after this," with no heap that grows as pagination goes deeper.
-
-## Scoring mechanism: understand BM25 via `_explain`
-
-`GET <index>/_explain/<doc_id>` runs a query against one specific document and returns the actual score computation instead of just the number, which is how the BM25 formula's pieces got inspected directly against real data.
-
-BM25's score for one term in one document is built from three named quantities — `idf`, `tf`, and `b` — each with a distinct plain-language job:
-
-- **`idf` (inverse document frequency)** — how rare the term is *across the whole corpus*. The more documents a term appears in, the lower its `idf`, trending toward 0 for a term nearly every document has (it carries no discriminating information); the fewer documents it appears in, the higher its `idf`. This is the "unique words matter more" half of relevance: a term that's rare across the corpus is more informative when it does show up, so it's weighted higher. Formula: `idf = log(1 + (N - n + 0.5)/(n + 0.5))`, where `N` is total documents with the field and `n` is how many of those contain the term.
-- **`tf` (term frequency, with saturation)** — how much a term's *repeated occurrence within one document* should matter. In isolation, this would just be a saturating curve on `freq` alone, something like `freq/(freq + k1)`: diminishing returns per additional occurrence rather than a linear reward, which is what stops something (or in this dataset's case, a repeated log template) from inflating a score just by repeating a word. `k1` controls how fast that saturation kicks in.
-- **`b` (field-length normalization)** — a term match in a short field should generally count for more than the same match in a long field, since the long field had more "opportunity" to contain the word incidentally. This is expressed as a correction factor `B = 1 - b + b·dl/avgdl`, where `dl` is this document's field length in tokens and `avgdl` is the corpus average; `b` controls how strongly the correction applies (`b=0` disables it, `b=1` applies it fully — Elasticsearch's default is `0.75`).
-
-`tf` and `b` aren't separate multiplicative pieces that get combined with `idf` at the end, though — they're fused into one shared fraction, because `B` doesn't stand alone, it corrects `k1` inside `tf`'s own denominator: `tf = freq / (freq + k1·B)`. That means `freq` shows up twice in the full formula — once alone in the numerator (capped by a `(k1+1)` ceiling), and again added to `k1·B` in the denominator, where `B` carries the length normalization computed from `b`. Multiplying that `tf` by `idf` and writing everything out in full gives the actual formula used above:
+Finding *which* documents match a query costs the same no matter what `from` is — the posting-list walk for `level: ERROR` doesn't change size based on pagination depth. What changes is a separate step downstream: each shard runs a streaming top-K algorithm, keeping a bounded max-heap of size `K = from + size` as it streams through matches. A better-sorted document knocks the worst entry out of the heap. That's `O(N log K)`, not `O(N log N)` — the shard never fully sorts all N matches, just maintains a heap of size K.
 
 ```
-score = idf × [ freq·(k1+1) / (freq + k1·(1 - b + b·dl/avgdl)) ]
+from=20, size=10   →   K = 30
+
+  Shard 1          Shard 2          Shard 3
+ ┌─────────┐      ┌─────────┐      ┌─────────┐
+ │ heap: 30│      │ heap: 30│      │ heap: 30│   each shard streams its
+ └────┬────┘      └────┬────┘      └────┬────┘    matches, keeps only its
+      │                │                │         own top 30
+      └────────────────┼────────────────┘
+                       ▼
+            Coordinating node merges
+          3 × 30 = 90 candidates, sorts
+            them, returns docs 21–30 —
+             discards the other 80
 ```
+
+Two costs stack on top of the heap itself. First, every shard ships its *entire* top-K, not just the final page, to the coordinating node — so network payload per shard scales with K, not with `size`. Second, the coordinating node has to merge `num_shards × K` candidates and re-sort them just to throw away everything before position `from`.
+
+Ask for `from: 0, size: 10` instead of `from: 20, size: 10`, and each shard only ever builds and ships a heap of 10 — the coordinator merges just `3 × 10 = 30` candidates. Same query, one-third the work, purely because `K` shrank.
+
+**Bottom line:** cost doesn't scale with `size`, it scales with `from + size`. A shallow page near the top stays cheap no matter the `size`. A deep page stays expensive even with a small `size`, because every shard still has to build, ship, and merge a heap that reaches all the way down to `from`.
+
+`search_after` (not implemented this session, but worth knowing exists) sidesteps this entirely. Instead of "give me the top `from + size` so I can discard the first `from`," it takes a cursor — the sort values of the last document you saw — and asks for "whatever comes strictly after this." No heap grows as pagination goes deeper.
+
+### Scoring mechanism: BM25 via `_explain`
+
+`GET <index>/_explain/<doc_id>` runs a query against one specific document and hands back the actual score computation instead of just the final number.
+
+This is how the BM25 formula's pieces got inspected against real data instead of staying abstract.
+
+```
+score = idf  ×  tf
+         │      │
+         │      └─ tf = freq·(k1+1) / (freq + k1·B)
+         │                                       │
+         │                                       └─ B = 1 - b + b·(dl/avgdl)
+         │  
+         └─ idf = log(1 + (N - n + 0.5) / (n + 0.5))
+```
+
+Three named quantities, each with a distinct job:
+
+- **`idf` (inverse document frequency)** — how rare the term is *across the whole corpus*. Think of it like a word in a crossword clue: the more common the word, the less it narrows things down. `idf` trends toward 0 for a term nearly every document has, since that term carries no discriminating information. The fewer documents contain it, the higher `idf` climbs — rare terms are more informative when they do show up, so they're weighted higher.
+- **`tf` (term frequency, with saturation)** — how much a term's *repeated occurrence within one document* should matter. In isolation this is a saturating curve on `freq` alone, something like `freq/(freq + k1)` — diminishing returns per extra occurrence rather than a linear reward, the same way hearing a joke a second time doesn't make it twice as funny. `k1` controls how fast that saturation kicks in.
+- **`b` (field-length normalization)** — a term match in a short field should generally count for more than the same match in a long field, since the long field had more "opportunity" to contain the word incidentally — a one-line status update mentioning "connection" is more clearly about connections than the same word buried in a 10,000-word essay. That correction is expressed as `B = 1 - b + b·dl/avgdl`, where `dl` is this document's field length in tokens and `avgdl` is the corpus average. `b` controls how strongly the correction applies: `b=0` disables it, `b=1` applies it fully, and Elasticsearch's default is `0.75`.
+
+`tf` and `b` aren't separate pieces bolted on after `idf` — they're fused into one shared fraction, because `B` corrects `k1` inside `tf`'s own denominator: `tf = freq / (freq + k1·B)`. `freq` shows up twice in the full formula — once alone in the numerator, capped by a `(k1+1)` ceiling, and again inside the denominator's `k1·B` term.
 
 **Hands-on:** ran `_explain` for the `"connection"` match against one of the earlier hits:
 
@@ -198,7 +272,7 @@ GET logs-app/_explain/ylcPYaAB2lPiMDlQDoKi
 }
 ```
 
-returned (trimmed to the numbers that matter):
+Returned (trimmed to the numbers that matter):
 
 ```json
 {
@@ -229,15 +303,21 @@ returned (trimmed to the numbers that matter):
 }
 ```
 
-Verified each number by hand: `idf = log(1 + (5000 - 274 + 0.5)/(274 + 0.5)) = log(18.223) ≈ 2.9024` — matches; `"connection"` appears in 274 of 5,000 documents (~5.5%), moderately rare, so it carries real weight. `tf = 1 / (1 + 1.2·(1 - 0.75 + 0.75·(4/4.6108))) = 1 / 2.0808 ≈ 0.4806` — matches; `dl` (4) is close to `avgdl` (4.6108) here, so length normalization barely moves the score either way for this particular hit. `2.2 × 2.9024 × 0.4806 ≈ 3.0687` — matches the reported score.
+By hand: `idf = log(1 + (5000 - 274 + 0.5)/(274 + 0.5)) = log(18.223) ≈ 2.9024`, matching. `"connection"` shows up in 274 of 5,000 documents — about 5.5%, moderately rare, so it carries real weight. `tf = 1 / (1 + 1.2·(1 - 0.75 + 0.75·(4/4.6108))) = 1 / 2.0808 ≈ 0.4806`, also matching. `dl` (4) sits close to `avgdl` (4.6108) here, so length normalization barely moves this particular hit's score either way. `2.2 × 2.9024 × 0.4806 ≈ 3.0687` — matches the reported score.
 
-One naming quirk worth knowing: the `"boost": 2.2` in this output is **not** a query-time relevance boost anyone configured — it's `k1 + 1 = 1.2 + 1 = 2.2`, the `(k1+1)` factor from the formula above, which Lucene's `_explain` output splits into its own labeled node rather than folding into `tf`. Don't go looking for where a `2.2` boost was set; it isn't one.
+Plugging in `freq=2` instead of `freq=1` (same `k1`, `b`, `dl`, `avgdl`) makes the saturation effect concrete: `tf(freq=2) = 2/(2 + 1.2·0.9007) = 2/3.0808 ≈ 0.6491`, versus `tf(freq=1) ≈ 0.4806`.
 
-Plugging in `freq=2` instead of `freq=1` (same `k1`, `b`, `dl`, `avgdl`) makes the saturation effect concrete: `tf(freq=2) = 2/(2 + 1.2·0.9007) = 2/3.0808 ≈ 0.6491`, versus `tf(freq=1) ≈ 0.4806` — the term count doubled, but `tf` only rose ~35%, not 100%, exactly the diminishing-returns behavior `k1` is designed to produce.
+**Bottom line:** doubling the term count only pushed `tf` up about 35%, not 100% — exactly the diminishing-returns behavior `k1` is built to produce.
 
-## Query context vs filter context
+### Query context vs filter context
 
-A `filter` clause produces only membership (yes/no), never a score, and that distinction is what makes it faster than an equivalent `must`. Because there's no score to compute, Elasticsearch can represent "which documents match this filter" as a cached bitset (one bit per document) per segment. The real payoff is on *repeated* identical filters — run `level: ERROR` as a `filter` clause across several different searches, and after the first one the rest reuse the cached bitset instead of re-executing the lookup. A `must` clause can never be cached this way because its output isn't just membership, it's a score that depends on exactly which query produced it.
+A `filter` clause produces only membership — yes or no — never a score. That's what makes it faster than an equivalent `must`. Because there's no score to compute, Elasticsearch can represent "which documents match this filter" as a cached bitset, one bit per document, per segment — like a bouncer's guest list that stays valid for the whole night instead of being re-checked from scratch at every door. The payoff shows up on *repeated* identical filters: run `level: ERROR` as a `filter` clause across several searches, and after the first one, the rest reuse the cached bitset instead of re-executing the lookup. A `must` clause can never be cached this way, because its output isn't just membership — it's a score that depends on exactly which query produced it.
+
+| | `must` | `filter` |
+|---|---|---|
+| Contributes to `_score` | Yes | No |
+| Cacheable as a bitset | No | Yes |
+| Use when | Result should affect ranking | Pure yes/no condition |
 
 **Hands-on:** rewrote the earlier `"connection"` `match` query, moving it from `must` into `filter` with no `must` clause left in the `bool`:
 
@@ -254,7 +334,7 @@ GET logs-app/_search
 }
 ```
 
-`hits.total.value` stayed at 274 — identical result set to the original `must` version. But every hit's `_score` came back as `0.0` instead of `3.0687466`, since there was no scoring clause left in the `bool` for Elasticsearch to compute a value from:
+`hits.total.value` stayed at 274 — identical result set to the `must` version. But every hit's `_score` came back `0.0` instead of `3.0687466`, since there was no scoring clause left in the `bool` for Elasticsearch to compute a value from:
 
 ```json
 {
@@ -278,4 +358,23 @@ GET logs-app/_search
 }
 ```
 
-Same documents, zero scoring cost, and (per the reasoning above) cacheable — confirming the rule of thumb: use `filter` for yes/no gates (exact matches, ranges, status codes), reserve `must` for whatever should actually influence result ranking.
+Same documents, zero scoring cost, and — per the reasoning above — cacheable.
+
+**Bottom line:** use `filter` for yes/no gates — exact matches, ranges, status codes. Reserve `must` for whatever should actually influence result ranking.
+
+## Questions I Had
+
+**Why did searching for `"timeout"` return zero hits when the logs clearly have timeout-related messages?**
+Because `match` compares analyzed tokens, not substrings. The dataset's actual message is `"database query timed out after {ms}ms"`, which tokenizes to `timed`, `out`, `after` — never the token `timeout`. No stemming or synonym expansion happens by default, so `timed` and `timeout` are just different tokens.
+
+**Can `term` ever match a `text` field, given that it skips analysis?**
+Only by coincidence — if the stored value is a single lowercase word with no punctuation, the analyzer leaves it unchanged, so it happens to equal its own analyzed token. Anything multi-word, mixed-case, or punctuated breaks that coincidence immediately.
+
+**What's the `"boost": 2.2` in the `_explain` output — did we configure a relevance boost somewhere?**
+No. It's `k1 + 1 = 1.2 + 1 = 2.2`, the `(k1+1)` ceiling factor from the `tf` formula. Lucene's `_explain` output splits it into its own labeled node instead of folding it into `tf`'s display, which makes it look like a configured boost when it isn't one.
+
+**If I sort by a field instead of relevance, do I still get a `_score` back?**
+No — it comes back `null`. Once ranking no longer depends on `_score`, Elasticsearch skips computing it by default.
+
+**If Elasticsearch doesn't do a full scan, why does a large `from` still get expensive?**
+Because the expensive part isn't finding matches, it's the top-K heap every shard has to build and ship, sized `K = from + size`. A deep `from` forces a big heap regardless of how small `size` is, and the coordinator still has to merge and re-sort `num_shards × K` candidates just to throw most of them away.

@@ -31,7 +31,7 @@ Before session 1 starts, Claude Code should walk through this, adapting depth to
 - The core problem it solves: finding relevant results in large volumes of text or structured data fast, including full-text search that a traditional relational database isn't built for, plus real-time aggregation over that same data
 - Where it's actually used in the industry — log and metrics analysis (the ELK/Elastic Stack), application and product search, security and observability platforms — so the learner sees why this project's "log search" theme was chosen, not just that it was
 - How it compares at a high level to a relational database (documents vs rows, inverted index vs B-tree index, eventual consistency trade-offs) — enough to place it mentally, not a full deep dive
-- A one-paragraph preview of where this specific project is headed, so the learner knows what the 5 sessions build toward
+- A one-paragraph preview of where this specific project is headed, so the learner knows what the 6 sessions build toward
 
 ## The project
 
@@ -141,7 +141,29 @@ No Kibana dashboards, no cluster scaling, no security hardening in this version 
 
 ---
 
-## Stretch (optional, after session 5)
+## Session 6 — Add a database of record
+
+**Goal:** stop treating Elasticsearch as the only datastore. Introduce SQLite as the system of record for logs, backfill it from the data that currently only lives in ES, and change the session 5 API's write path so ES becomes a synced, derived copy instead of the source of truth.
+
+**Concepts to cover before the tasks:** why ES is rarely the primary store in real systems — it's optimized for search/aggregation access patterns, not for being the durable system of record (no real transactions, eventually-consistent refresh cycle, mapping-driven schema). Frame the resulting architecture explicitly against a pattern already familiar: an app DB plus a Redis cache — same shape (one source of truth, one derived copy tuned for a different access pattern), but call out where the analogy breaks: Redis can silently evict/expire and fall back to the DB, ES doesn't expire on its own, so drift between the two stores has to be caught and repaired deliberately rather than resolving itself.
+
+**Tasks:**
+- [ ] Design an explicit SQLite `logs` table schema mirroring the session 2 ES mapping (same fields, appropriate SQLite types — consistent with this project's explicit-schema convention)
+  - Note: SQLite over Postgres deliberately — a file needs no third docker-compose service, and the dual-write/consistency lesson is identical either way
+- [ ] Write a backfill script that reads the existing documents out of the session 2 ES index and inserts them into the new SQLite table, making SQLite the source of truth for the first time
+- [ ] Write a separate reindex/sync script that rebuilds the ES index from SQLite (not from the original generator) — this is the "ES is derived from the DB" pattern made concrete, not just asserted
+- [ ] Extend the session 5 TypeScript API with a write path (new or modified endpoint) that inserts a new log into SQLite first, then indexes it into ES — and verify a round trip: write through the API, confirm the row in SQLite, confirm the doc in ES
+- [ ] Add the SQLite file path to `.env.example` alongside the existing ES connection config, consistent with keeping config explicit rather than hardcoded
+
+**Deep dive:** now that a real dual-write path exists, go deeper on its actual failure mode — what happens if the process crashes or the ES write fails after the SQLite write already committed (the two stores now disagree, and only the DB's version is trustworthy), and why that's an inherent property of dual-write rather than a bug to code around. Contrast this conceptually with CDC/log-based sync (e.g. reading the DB's write-ahead log or a change stream to drive ES updates asynchronously instead of writing to both from the application) — what it buys (a single write path, ES updates can't be "half-done") and what it costs (more moving infrastructure, added lag before ES reflects a write), and why dual-write is nonetheless the pattern a small project — or a lot of real ones — actually reaches for first. Land on what "eventually consistent" concretely means for this system: SQLite is always immediately correct, ES is correct as of the last successful sync, and the reindex script from the tasks above is the recovery mechanism when the two have drifted.
+
+- [ ] Closing hands-on: deliberately simulate a failed ES write in the dual-write endpoint (e.g. point it at a bad index name or kill ES mid-request), confirm the SQLite row still exists and ES doesn't, then run the reindex script and confirm ES catches back up — a hands-on recovery from the exact drift the deep dive just described
+
+**Deliverable:** SQLite holding the log data as source of truth, an ES index kept in sync with it via an explicit reindex script, and a TypeScript API whose write path demonstrates (and can recover from) the dual-write pattern.
+
+---
+
+## Stretch (optional, after session 6)
 
 Once the fundamentals above are solid, good next directions: index lifecycle management, snapshots/restore, reindexing after a mapping change, and basic security (enabling auth, API keys) — this last one ties naturally into the IAM/secrets work already done in the DevOps final project.
 
@@ -151,7 +173,7 @@ Once the fundamentals above are solid, good next directions: index lifecycle man
 
 **Goal:** get hands-on with Postgres's own full-text search (`tsvector`/`tsquery`, GIN indexes) and `pg_trgm` for fuzzy/substring matching, to answer a practical question: what can you actually get out of Postgres alone, without standing up a separate Elasticsearch service, and where does that stop being enough — so the choice to add Elasticsearch to a project (or not) is a real trade-off decision, not a default.
 
-This is a side project, not a continuation of the main one — it doesn't feed into session 5's deliverable, but it deliberately runs the same kind of query against the same log data so the comparison is concrete rather than theoretical.
+This is a side project, not a continuation of the main one — it doesn't feed into the main project's deliverable, but it deliberately runs the same kind of query against the same log data so the comparison is concrete rather than theoretical.
 
 **Concepts to cover before the tasks:** what `tsvector` and `tsquery` are (Postgres's own text-search types), how a GIN index over a `tsvector` column is Postgres's version of an inverted index, and what `pg_trgm` adds (trigram-based fuzzy/substring matching) — just enough to run the first comparison queries. Where Postgres's approach actually stops scaling like Elasticsearch's is the deep dive's job, once there are real results from both systems to compare.
 

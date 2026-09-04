@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Learned the Query DSL against the `logs-app` dataset: `match` (analyzed, free-text) vs `term` (exact, unanalyzed), and `bool` for combining conditions via `must` (scores) vs `filter` (yes/no, cacheable). Went deep on why deep pagination (`from`) gets expensive — a per-shard bounded heap, not a full scan — and used `_explain` to see BM25 relevance scoring broken into its real formula pieces. Confirmed hands-on that moving a clause from `must` to `filter` returns the exact same documents but drops scoring entirely.
+Learned the Query DSL against the `logs-app` dataset: `match` (analyzed, free-text) vs `term` (exact, unanalyzed), `match_phrase` (analyzed but ordered and adjacent) for a step in between, and a `keyword` multi-field for exact whole-value equality on a `text` field without changing its type. Covered `bool` for combining conditions via `must` (scores) vs `filter` (yes/no, cacheable). Went deep on why deep pagination (`from`) gets expensive — a per-shard bounded heap, not a full scan — and used `_explain` to see BM25 relevance scoring broken into its real formula pieces. Confirmed hands-on that moving a clause from `must` to `filter` returns the exact same documents but drops scoring entirely.
 
 ## Request lifecycle
 
@@ -126,6 +126,58 @@ The generator weights `ERROR` at 5 out of 100 (`LEVEL_WEIGHTS` in [`generate_log
 }
 ```
 
+### `match_phrase`, and matching a whole field, while staying `text`
+
+`match` and `term` sit at two extremes — any token, or an exact whole value on an unanalyzed field. Two more tools sit in between, and both still work on a `text` field without ever changing its mapping type: `match_phrase` for an exact, ordered phrase, and a `keyword` multi-field for exact whole-value equality.
+
+**`match_phrase`: same tokens, but ordered and adjacent.** A `text` field's inverted index stores each token's *position*, not just its presence — that's `index_options: positions`, the default for `text`. `keyword` fields skip this entirely, since the whole value is one token with nothing to check adjacency against. `match_phrase` analyzes the query exactly like `match` does, then requires every resulting token to appear in the field in that order, with no gap between them by default — a `slop` parameter widens that allowed gap if needed.
+
+| | `match` | `match_phrase` |
+|---|---|---|
+| Token requirement | any one token (OR across tokens) | all tokens, in that order |
+| Adjacency required | No | Yes — gap 0 by default, widen with `slop` |
+| Matches a token subsequence, not the whole value | Yes | Yes |
+
+```
+GET logs-app/_search
+{
+  "query": {
+    "match_phrase": { "message": "retrying connection" }
+  }
+}
+```
+
+Every `"connection"`-containing document in this dataset comes from the single `DEBUG` template `"retrying connection, attempt {n}"` (see [`generate_logs.py`](/scripts/generate_logs.py)), so `"retrying"` always sits immediately before `"connection"`. This phrase query should land on the same 274 documents the plain `match "connection"` query found earlier.
+
+**Exact whole-value match: a `keyword` multi-field, not a workaround.** Neither `match` nor `match_phrase` can express "the field's entire value equals this, nothing more" — both work in terms of token containment, never full-value equality. Getting that without changing `message`'s type to `keyword` means adding a `keyword` **multi-field**: a second, sibling field indexed from the same source value, unanalyzed.
+
+```
+PUT logs-app/_mapping
+{
+  "properties": {
+    "message": {
+      "type": "text",
+      "fields": {
+        "exact": { "type": "keyword" }
+      }
+    }
+  }
+}
+```
+
+`message` keeps its type and its analyzed inverted index untouched; `message.exact` is a second index over that same underlying value, storing it byte-for-byte. Query it with `term`, exactly like any other `keyword` field:
+
+```
+GET logs-app/_search
+{
+  "query": {
+    "term": { "message.exact": "retrying connection, attempt 39" }
+  }
+}
+```
+
+**Bottom line:** the two exact-ish options differ in *sensitivity*, not just syntax. `term` on the `keyword` multi-field is case-, punctuation-, and whitespace-sensitive — it compares the literal stored bytes. `match_phrase`, even when it happens to span the whole field, still goes through the same analyzer as `match`: case and punctuation are normalized away, and `"attempt"` / `"attempts"` are unrelated tokens to it. Use `match`/`match_phrase` for anything that should tolerate the analyzer's normalization; reach for a `keyword` multi-field when it shouldn't.
+
 ### `bool`: `must` vs `filter`
 
 `bool` combines multiple conditions, but its clauses aren't interchangeable — even though both require the condition to hold true.
@@ -134,7 +186,7 @@ A useful mental model: `must` is a judge scoring a contest entry — the entry h
 
 Only `must` contributes to `_score`. `filter` is a pure yes/no gate that contributes nothing to relevance. For a deterministic condition — an exact `term` match, say — the *result set* comes out identical whichever clause it sits in. What differs is the score, and, as the "Query context vs filter context" section below covers, the performance characteristics.
 
-**Hands-on:** combined the two earlier queries — free-text on `message`, exact filter on `level`:
+**Hands-on:** first attempt combined the two earlier queries — free-text on `message`, exact filter on `level`:
 
 ```
 GET logs-app/_search
@@ -152,18 +204,51 @@ GET logs-app/_search
 }
 ```
 
-No document can satisfy both at once — the only message template containing `"connection"` is the `DEBUG`-level one, and `level: ERROR` is a hard filter. Running it confirms that directly:
+Zero hits — and not by chance. By [`generate_logs.py`](/scripts/generate_logs.py), the only message that has the word `connection` is `retrying connection, attempt {n}`. However, this is part of `level: DEBUG`. Therefore, there is no document that can apply both `filter` and `must`.
 
-```json
+`service`, by contrast, is assigned independently of `level`/`message`, so filtering on it can't contradict the `must` clause.
+
+```
+GET logs-app/_search
 {
-  "hits": {
-    "total": { "value": 0, "relation": "eq" },
-    "hits": []
+  "query": {
+    "bool": {
+      "must": [
+        { "match": { "message": "connection" } }
+      ],
+      "filter": [
+        { "term": { "service": "inventory" } }
+      ]
+    }
   }
 }
 ```
 
-**Bottom line:** use `must` when a condition should actually move the ranking. Use `filter` for anything that's just a hard yes/no gate.
+56 hits out of the 274 total `"connection"` matches:
+
+```json
+{
+  "hits": {
+    "total": { "value": 56, "relation": "eq" },
+    "max_score": 3.0687466,
+    "hits": [
+      {
+        "_score": 3.0687466,
+        "_source": {
+          "timestamp": "2026-08-28T15:46:54.802406+00:00",
+          "level": "DEBUG",
+          "service": "inventory",
+          "message": "retrying connection, attempt 39",
+          "status_code": 200
+        }
+      },
+      ...
+    ]
+  }
+}
+```
+
+**Bottom line:** use `must` when a condition should actually move the ranking. Use `filter` for anything that's just a hard yes/no gate — but pick a field that's actually independent of the `must` clause, or the combination can be vacuous (as with `level` here) instead of illustrative.
 
 ### Sorting and pagination
 

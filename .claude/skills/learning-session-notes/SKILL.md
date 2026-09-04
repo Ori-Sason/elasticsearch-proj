@@ -19,6 +19,7 @@ Before writing, always read `reference/user-background.md` to calibrate your sta
 ## Plain Language, Full Technical Depth
 - **Simplify the language, never the content:** Keep every mechanism, architectural constraint, and under-the-hood reality, but strip away the jargon where a simple word works better.
 - **One idea per sentence:** Avoid massive, comma-heavy parenthetical blocks. Density reads as complexity. Short, punchy sentences carry heavy technical weight much better.
+- **Self-check before sending:** Scan for em-dashes and parentheticals. More than one per sentence — split it into two. Prefer `X → Y` arrow notation over a prose sentence describing a mapping or relationship (e.g. `Doc ID → Field Value`, not "a structure that connects doc IDs to field values").
 - **Clear Analogies:** Anchor abstract concepts to familiar systems (e.g., "Think of Helm like `apt` or `yum` in Linux, just for Kubernetes").
 - **Worked Numeric Examples:** Any abstract mechanism — a formula, an algorithm, a scoring or estimation process — gets a small, concrete numeric walk-through with real numbers, not just prose describing it in general terms.
 - **State Facts, Don't Narrate Verification:** Don't write "predicted X, and confirmed" or "as expected." State the result directly and let it speak for itself.

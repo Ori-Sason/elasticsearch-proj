@@ -186,6 +186,8 @@ A useful mental model: `must` is a judge scoring a contest entry — the entry h
 
 Only `must` contributes to `_score`. `filter` is a pure yes/no gate that contributes nothing to relevance. For a deterministic condition — an exact `term` match, say — the *result set* comes out identical whichever clause it sits in. What differs is the score, and, as the "Query context vs filter context" section below covers, the performance characteristics.
 
+`bool` is a container. `must` and `filter` can't sit directly under `query`, they only exist as `bool`'s sub-clauses: `query.bool.filter`, `query.bool.must`.
+
 **Hands-on:** first attempt combined the two earlier queries — free-text on `message`, exact filter on `level`:
 
 ```

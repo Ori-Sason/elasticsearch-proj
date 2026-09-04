@@ -108,14 +108,14 @@ No Kibana dashboards, no cluster scaling, no security hardening in this version 
 **Concepts to cover before the tasks:** the distinction between bucket aggregations (grouping) and metric aggregations (computing a number over a group) — just enough to build the first ones. How aggregations actually execute, and where they can go approximate at scale, is the deep dive's job once there are real results to question.
 
 **Tasks:**
-- [ ] Build a `terms` aggregation for the top error-producing services
-- [ ] Build a `date_histogram` aggregation for request volume over time
-- [ ] Nest a metric aggregation (`avg` or `percentiles`) inside a bucket aggregation
-- [ ] Sanity-check one aggregation result by manually counting/filtering the same thing a different way, to confirm you trust the result
+- [x] Build a `terms` aggregation for the top error-producing services
+- [x] Build a `date_histogram` aggregation for request volume over time
+- [x] Nest a metric aggregation (`avg` or `percentiles`) inside a bucket aggregation
+- [x] Sanity-check one aggregation result by manually counting/filtering the same thing a different way, to confirm you trust the result
 
 **Deep dive:** now that real aggregation results exist, go deeper on how they run — over `doc_values` (a columnar, on-disk data structure built at index time specifically to make aggregations fast, distinct from the inverted index used for search), and why that's how aggregations execute over the same data structures used for search rather than needing a separate analytics system. Then unpack why a `terms` aggregation over a sharded index can be approximate — `shard_size`, `doc_count_error_upper_bound`, and what's actually happening when each shard only returns its own top N terms before they're merged.
 
-- [ ] Closing hands-on: rerun the `terms` aggregation from the tasks with a deliberately small `size`/`shard_size`, inspect the resulting `doc_count_error_upper_bound`, and explain in your own words what that number represents
+- [x] Closing hands-on: rerun the `terms` aggregation from the tasks with a deliberately small `size`/`shard_size`, inspect the resulting `doc_count_error_upper_bound`, and explain in your own words what that number represents
 
 **Deliverable:** 3–4 aggregation queries that could plausibly back a real log-monitoring dashboard.
 

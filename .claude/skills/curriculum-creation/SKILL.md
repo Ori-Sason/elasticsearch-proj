@@ -56,7 +56,7 @@ Produce a single markdown file with this shape:
 
 ## Where the file goes
 
-- Path: `learning-notes/<topic>-curriculum.md` (matches how a companion notes skill would reference it, e.g. `learning-notes/elasticsearch-curriculum.md`).
+- Path: `learning-notes/<topic>-curriculum.md` (matches how a companion notes skill would reference it, e.g. `learning-notes/kubernetes-curriculum.md`).
 - One file for the whole curriculum, not one per session — Claude Code needs the full sequence in view to know what's next and what came before. A side project gets its own section in the same file (or its own short file, linked from the main one) rather than vanishing from the plan.
 
 ## After writing

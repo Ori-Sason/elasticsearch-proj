@@ -1,5 +1,7 @@
 # Session 5 — Ship a TypeScript API
 
+Project checkpoint commit: [c58ed48](https://github.com/Ori-Sason/elasticsearch-proj/commit/c58ed48808cbac1a55e7849e52bda428a34c27a2)
+
 ## TL;DR
 
 Wrapped the cluster in a small Express + `@elastic/elasticsearch` API: a `/search` endpoint translating session 3's `bool`/`match`/`term`/`filter` queries, and a `/stats` endpoint translating session 4's `terms` + nested `avg` + `date_histogram` aggregations.

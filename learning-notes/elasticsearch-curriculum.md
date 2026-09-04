@@ -128,14 +128,14 @@ No Kibana dashboards, no cluster scaling, no security hardening in this version 
 **Concepts to cover before the tasks:** what the official client libraries add on top of raw HTTP calls to Elasticsearch (request building, connection handling) — enough to get the client set up. Retries and error-handling behavior get the deeper pass once there's a running endpoint to actually break.
 
 **Tasks:**
-- [ ] Set up a minimal TypeScript project using the `@elastic/elasticsearch` client
-- [ ] Build a `/search` endpoint wrapping the session 3 queries (accepting basic query params — text, level, date range)
-- [ ] Build a `/stats` endpoint wrapping the session 4 aggregations
-- [ ] Add a `.env.example` documenting the Elasticsearch connection config (host, port, any auth), consistent with keeping config explicit rather than hardcoded
+- [x] Set up a minimal TypeScript project using the `@elastic/elasticsearch` client
+- [x] Build a `/search` endpoint wrapping the session 3 queries (accepting basic query params — text, level, date range)
+- [x] Build a `/stats` endpoint wrapping the session 4 aggregations
+- [x] Add a `.env.example` documenting the Elasticsearch connection config (host, port, any auth), consistent with keeping config explicit rather than hardcoded
 
 **Deep dive:** now that the endpoints exist, go deeper on what the client is actually doing on every request — connection pooling, its default retry/backoff behavior on a transient failure, and how it surfaces Elasticsearch-side errors (e.g. a mapping error, a missing index) versus a network-level failure, so the API can eventually tell those apart instead of returning a generic 500 for everything. Also revisit how the query/aggregation JSON from sessions 3 and 4 maps directly onto the client's request objects — this should feel like translation, not new material.
 
-- [ ] Closing hands-on: add basic error handling to both endpoints that distinguishes an Elasticsearch error (e.g. bad query params) from a connection failure, and returns a sensible status code for each
+- [x] Closing hands-on: add basic error handling to both endpoints that distinguishes an Elasticsearch error (e.g. bad query params) from a connection failure, and returns a sensible status code for each
 
 **Deliverable:** a running local API with two endpoints, backed by the cluster from session 1 and the data from session 2.
 

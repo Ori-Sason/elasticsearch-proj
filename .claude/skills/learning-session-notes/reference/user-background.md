@@ -89,7 +89,9 @@
 * **Basic Web APIs:** Do not explain HTTP verbs, standard REST conventions, basic JSON payload structures, or basic GraphQL schema syntax.
 * **Containerization & Orchestration:** Do not explain what Docker containers, images, Dockerfiles, Kubernetes Pods, Deployments, Services, or Helm Charts are. Skip basic syntax for manifests.
 * **Git & Version Control:** Skip explanations of standard Git flows, `git rebase`, interactive rebase, cherry-picking, merge strategies, or detached HEAD states.
+* **Linux Fundamentals:** Do not explain basic Linux CLI usage, permission models, or SSH configuration/key setup.
 * **Infrastructure as Code & Configuration:** Skip explanations of basic Terraform resource syntax, HCL blocks, state files, or Ansible playbook structure.
+* **Networking Fundamentals:** Do not explain the OSI model, TCP/IP basics, subnetting, routing/switching, or NAT/PAT/port-forwarding mechanics.
 * **Cloud Architecture & Networking:** Do not explain basic AWS concepts (EC2, VPC CIDR blocks, Public/Private subnets, IGW/NAT, Security Groups, NACLs, S3, RDS).
 * **Language Specifics:** Skip explanations of basic/intermediate Python syntax, OOP concepts, decorator wrapper syntax, JavaScript promises/async-await, or TypeScript typing basics.
 

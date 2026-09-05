@@ -1,6 +1,8 @@
+<!-- PROJECT-SPECIFIC: replace this block when starting a new learning project -->
 # Project: Elasticsearch Learning
 
-This project exists to learn Elasticsearch hands-on by building a small log search and analytics stack. The full plan lives in `learning-notes/elasticsearch-curriculum.md` — read it before starting any work here.
+This project exists to learn Elasticsearch hands-on by building a small log search and analytics stack. The full plan lives in `learning-notes/curriculum.md` — read it before starting any work here.
+<!-- /PROJECT-SPECIFIC -->
 
 ## Persona & Context Calibration
 
@@ -12,10 +14,10 @@ This project exists to learn Elasticsearch hands-on by building a small log sear
 
 ## Workflow & Session Management
 
-- **Curriculum Tracking:** At the start of a session, check which task checkboxes in `learning-notes/elasticsearch-curriculum.md` are already ticked to find where we left off — don't ask to be told. Work through sessions in order. Each session's deliverable is a dependency for the next one — don't skip ahead even if it looks simple.
-- **Progress Updates:** As tasks are completed, check them off directly in `learning-notes/elasticsearch-curriculum.md` (`[ ]` → `[x]`), so progress persists across sessions.
-- **Session Initialization:** If this is the very first session in the project, start with the "Introduction — what is Elasticsearch, and why use it" section before session 1.
-- **Teaching Style:** Follow the teaching instructions in `learning-notes/elasticsearch-curriculum.md`: explain concepts before writing code, connect new ideas back to earlier sessions, and check understanding as you go rather than lecturing straight through.
+- **Curriculum Tracking:** At the start of a session, check which task checkboxes in `learning-notes/curriculum.md` are already ticked to find where we left off — don't ask to be told. Work through sessions in order. Each session's deliverable is a dependency for the next one — don't skip ahead even if it looks simple.
+- **Progress Updates:** As tasks are completed, check them off directly in `learning-notes/curriculum.md` (`[ ]` → `[x]`), so progress persists across sessions.
+- **Session Initialization:** If this is the very first session in the project, start with the curriculum's Introduction section before session 1.
+- **Teaching Style:** Follow the teaching instructions in `learning-notes/curriculum.md`.
 - **Hands-on Execution:** The user runs commands themselves for practice. Give the exact command and explain what it does; don't execute it for them via a shell tool unless they explicitly ask you to run something.
 - **Durable Guidance Lives in the Repo:** When a correction or preference emerges during a session that should persist beyond this conversation, write it into this file or the relevant skill file — not only into your own memory system. Memory is local to this machine and doesn't travel with the repo; anything meant to reproduce identically on a new VM or for a collaborator has to be a checked-in file.
 - **Skill Triggers:**
@@ -24,9 +26,12 @@ This project exists to learn Elasticsearch hands-on by building a small log sear
 
 ## Tools
 
-- **`context7` MCP:** Use it when explaining or writing exact API, query-DSL, mapping, or config syntax. Don't rely on trained knowledge — Elasticsearch syntax drifts across versions, and this project's convention of explicit (never dynamic) mappings makes exact syntax matter.
+- **`context7` MCP:** Use it when explaining or writing exact API, query, or config syntax. Don't rely on trained knowledge — syntax drifts across versions.
 
 ## Technical Conventions
 
-- Mappings are explicit, never left to dynamic mapping.
 - Config is explicit over defaulted — e.g. a `.env.example` documenting connection settings, not hardcoded values.
+
+<!-- PROJECT-SPECIFIC: replace this block when starting a new learning project -->
+- Mappings are explicit, never left to dynamic mapping.
+<!-- /PROJECT-SPECIFIC -->

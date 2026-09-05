@@ -77,4 +77,4 @@ Before writing, always read `reference/user-background.md` to calibrate your sta
 - **No Mid-Sentence Hard-Wraps:** One paragraph per line in the raw markdown, blank lines between paragraphs only. Never wrap a sentence across multiple lines mid-thought.
 - **No Editorializing:** Do not narrate the session (e.g., "The user asked for X, so we did Y"). Just state the technical facts.
 - **No Meta-Commentary:** Do not write wrap-ups like "This closes out Session 1!".
-- **Checklist:** Auto-check the curriculum checkboxes (`learning-notes/<topic>-curriculum.md`) when a topic is completed.
+- **Checklist:** Auto-check the curriculum checkboxes (`learning-notes/curriculum.md`) when a topic is completed.

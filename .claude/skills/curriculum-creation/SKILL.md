@@ -15,28 +15,20 @@ If any of this isn't already clear from the conversation, ask before drafting �
 - **Audience/skill level.** You **MUST** read and respect `.claude/skills/learning-session-notes/reference/user-background.md` before drafting any curriculum. This calibrates starting depth so you skip known material and eliminate fluff instead of re-teaching fundamentals or assuming context that hasn't been covered.
 - **Environment and tools available**, so tasks are concrete and runnable, not generic.
 - **Rough scope** — single lesson, short series, or full curriculum — and session count if the user has a preference; otherwise choose a number that fits the topic and say why.
+- **Documentation-lookup MCP availability.** Check whether `context7` (or equivalent) is installed before drafting. If not, suggest installing it now.
 
 ## Depth & Calibration
 
-Based on the user's advanced background (CPA to Full-Stack/DevOps Engineer, extensive active reference in OS/Networking/Cloud internals), apply these strict calibration rules:
-
-- **Assume Advanced Technical Depth:** Every curriculum must start at an intermediate-to-advanced mechanism level. Focus immediately on architectural trade-offs, internal engine mechanics, low-level execution paths, production edge cases, and hands-on delivery.
-- **Never Re-Teach Fundamentals:** Do NOT dedicate theory sessions, introductory paragraphs, or basic tasks to concepts the learner already knows. Specifically, **NEVER** cover or over-explain:
-  - Basic Linux CLI / SSH configurations
-  - Basic Containerization (Docker, Dockerfiles) or Kubernetes core concepts (Pods, Deployments, Services)
-  - Basic Git commands and workflows (commits, branches, merges, rebase)
-  - Basic Web APIs (REST conventions, standard HTTP verbs, basic GraphQL schema syntax)
-  - Basic Language Syntax (Python OOP/decorators, basic JS/TS/Promises)
-  - Basic Networking & Cloud (OSI Model, TCP/IP, NAT, Port Forwarding, basic AWS VPC/EC2 setups)
+Calibration comes entirely from `user-background.md` — read fresh each time, never memorized or assumed. It could describe a total beginner or a systems expert; follow whatever it says, including its own "don't over-explain X" list.
 
 ## Design principles
 
 - **One throughline project, by default — not a topic list.** Most sessions should build the same running project further, not cover an isolated concept in a vacuum, so a learner can say what they *built*, not just what they *read about*. This is a preference, not a hard rule: if a subject genuinely doesn't fit the main project, give it its own small side project rather than dropping it or forcing an awkward fit — don't sacrifice an important subject just to keep everything in one project.
 - **Sessions are dependencies, not modules.** Each session's deliverable feeds the next one. If a session could be deleted or reordered without breaking anything downstream, the sequencing isn't doing its job. A side project spun off for a subject that doesn't fit the main line is the exception — it doesn't need to feed the main project's chain, but it should still say up front why it's a detour.
-- **Theory → hands-on → deep dive → hands-on — but only when the topic has a deep dive in it.** Start with just enough background to know what's about to be built and why — omitting basic intros per the calibration rules. Move quickly into real hands-on work; don't over-explain before letting the learner touch it. Then, move into the harder corners — memory management, system calls, storage engine internals, socket options — and close with hands-on that applies it. If the topic doesn't have that further depth, skip the second theory pass for that session rather than filling the space with a repeat or a different-angle retelling relabeled as a deep dive.
+- **Theory → hands-on → deep dive → hands-on — but only when the topic has a deep dive in it.** Start with just enough background to know what's about to be built and why — omitting basic intros per the calibration rules. Move quickly into real hands-on work; don't over-explain before letting the learner touch it. Then, move into the harder corners appropriate to the topic and the reader's calibrated depth (from `user-background.md`) — and close with hands-on that applies it. If the topic doesn't have that further depth, skip the second theory pass for that session rather than filling the space with a repeat or a different-angle retelling relabeled as a deep dive.
 - **Explicit over implicit**, in both the project's own conventions (e.g. explicit config over relying on defaults) and in the curriculum itself — spell out what a session's theory passes should actually cover, don't just say "explain the basics."
 - **Verify version-specific syntax against current docs, not just trained knowledge.** When a concept or task depends on exact API/config syntax that changes across versions, use a documentation-lookup MCP (e.g. `context7`, if available) to check current syntax rather than trusting memory alone.
-- **Scope stretch material out.** Advanced/production concerns (scaling, security hardening, performance tuning) belong in an optional stretch section at the end, not folded into early sessions where they'd bury the fundamentals (though for this user, "fundamentals" already implies advanced system-level mechanics).
+- **Scope stretch material out.** Advanced/production concerns (scaling, security hardening, performance tuning) belong in an optional stretch section at the end, not folded into early sessions where they'd bury the fundamentals — what counts as "fundamentals" itself shifts with the reader's calibrated depth.
 
 ## File structure
 
@@ -56,18 +48,18 @@ Produce a single markdown file with this shape:
 
 ## Where the file goes
 
-- Path: `learning-notes/<topic>-curriculum.md` (matches how a companion notes skill would reference it, e.g. `learning-notes/kubernetes-curriculum.md`).
+- Path: `learning-notes/curriculum.md`.
 - One file for the whole curriculum, not one per session — Claude Code needs the full sequence in view to know what's next and what came before. A side project gets its own section in the same file (or its own short file, linked from the main one) rather than vanishing from the plan.
 
 ## After writing
 
 Offer to write or update the project's `CLAUDE.md` with a short pointer to the curriculum file (what it's for, the teach-first instruction, where to resume from). `CLAUDE.md` loads automatically every Claude Code session; the curriculum file doesn't, unless something points to it. Without that pointer the learner has to ask for it to be read every time, which defeats a lot of the point.
 
-While doing this, check whether a documentation-lookup MCP (e.g. `context7`) is installed. If not, suggest the user install it before starting the curriculum's sessions — per the design principle above, sessions use it to verify version-specific API/config syntax rather than relying on trained knowledge alone. If it is installed, add the same note to `CLAUDE.md` that this project's own file uses (a short "Tools" section pointing at it) so every session picks it up automatically.
+While updating `CLAUDE.md`, if a documentation-lookup MCP is installed, add a short "Tools" section pointing at it (matching this project's own file) so every session picks it up automatically.
 
 ## What to leave out
 
 - Don't write full technical content (code samples, exact commands, Query-DSL-level detail, etc.) into the curriculum itself — that's what the session actually teaches. The curriculum names concepts and tasks; it doesn't pre-empt the teaching by dumping the answers.
-- Don't include introductory filler or fluff that violates the user's advanced calibration rules.
+- Don't include introductory filler or fluff that violates `user-background.md`'s calibration.
 - Don't front-load every interesting tangent into session 1. If a topic doesn't serve that session's deliverable, it belongs later, in the stretch section, or in its own side project.
 - Don't pad sessions to hit a target count, and don't cram unrelated concepts into one session to hit a smaller one. Let the project's natural structure set the session count.

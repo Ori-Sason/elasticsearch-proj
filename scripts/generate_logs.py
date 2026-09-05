@@ -81,14 +81,15 @@ def generate_doc():
     }
 
 
-def doc_stream():
+# bulk action. In this case it's adding documents to an index
+def action_stream():
     for _ in range(NUM_DOCS):
         yield {"_index": INDEX_NAME, "_source": generate_doc()}
 
 
 def main():
     es = Elasticsearch(ES_URL)
-    success, errors = bulk(es, doc_stream(), raise_on_error=False)
+    success, errors = bulk(es, action_stream(), raise_on_error=False)
     print(f"Indexed: {success}")
     if errors:
         print(f"Errors: {len(errors)}")

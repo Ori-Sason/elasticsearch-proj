@@ -101,7 +101,7 @@ Wrote [`/scripts/generate_logs.py`](/scripts/generate_logs.py) to generate and l
 - **Level distribution is weighted, not uniform** — `{"INFO": 70, "DEBUG": 15, "WARN": 10, "ERROR": 5}` via `random.choices(..., weights=...)`, so the dataset looks like a real service's logs (mostly routine traffic) rather than an even split across levels. This matters for session 4's aggregations, which are more meaningful against a realistic skew.
 - **`status_code` is tied to `level`**, not independently random — `ERROR` only ever produces 5xx codes, `INFO`/`DEBUG` mostly 2xx, `WARN` a mix including `429`/`408`. This makes compound queries later, like "`ERROR` logs with `status_code >= 500`," return something meaningful instead of arbitrary noise.
 - **Timestamps are spread across the last 7 days**, randomly offset from `datetime.now(timezone.utc)`, giving `date_histogram` (session 4) an actual time range to bucket.
-- **The bulk helper is a generator, not a pre-built list** — `doc_stream()` `yield`s one `{"_index": "logs-app", "_source": {...}}` dict at a time, and `elasticsearch.helpers.bulk(es, doc_stream(), raise_on_error=False)` consumes it, batching internally into the NDJSON format described above rather than requiring all 5,000 documents to be built in memory first.
+- **The bulk helper is a generator, not a pre-built list** — `action_stream()` `yield`s one `{"_index": "logs-app", "_source": {...}}` dict at a time, and `elasticsearch.helpers.bulk(es, action_stream(), raise_on_error=False)` consumes it, batching internally into the NDJSON format described above rather than requiring all 5,000 documents to be built in memory first.
 
 Ran it:
 

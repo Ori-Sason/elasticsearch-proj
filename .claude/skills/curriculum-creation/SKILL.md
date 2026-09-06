@@ -45,11 +45,22 @@ Produce a single markdown file with this shape:
    - **Deep dive (only when the topic has one)** — after the hands-on tasks, move into the more complicated areas: mechanisms, architecture trade-offs, internal engine mechanics, edge cases. If there's nothing further to go into, skip this rather than padding. When included, note where it should lead into further hands-on (more tasks, or extending existing ones).
    - **Deliverable** — what should exist and work by the end of the session.
 6. **Stretch section** (optional) — advanced topics deliberately left out of the core sequence, named but not detailed.
+7. **Side projects** (optional) — same shape as a numbered session (Goal, Concepts, Tasks, Deep dive, Deliverable), but titled by name instead of a session number (e.g. "Optional session — Postgres's built-in full-text search"). Being unnumbered is what lets it sit wherever it's most relevant without renumbering the main sequence.
 
 ## Where the file goes
 
 - Path: `learning-notes/curriculum.md`.
 - One file for the whole curriculum, not one per session — Claude Code needs the full sequence in view to know what's next and what came before. A side project gets its own section in the same file (or its own short file, linked from the main one) rather than vanishing from the plan.
+
+## Updating an existing curriculum
+
+Triggered by an explicit request, or by a proactive flag the user accepts (see `CLAUDE.md`'s `curriculum-creation` trigger).
+
+- **Read before editing.** Re-read `curriculum.md` and `user-background.md` fresh, not from earlier in the conversation. Confirm with the user what kind of change this is: a new session in the main sequence, an amendment to an unfinished session, a stretch addition, or a side project.
+- **Inserting a session:** renumber forward from the insertion point, and check later sessions' prose for stale number references (e.g. "the session 2 dataset") — not just the headers.
+- **Side project:** doesn't renumber the main sequence. Place it wherever it fits best — that's usually near the sessions it's most related to, not necessarily at the end. State up front why it's a detour, per the side-project principle above.
+- **Amending an unfinished session:** edit its tasks or deep dive in place instead of spinning off a new one.
+- Same design principles and voice as authoring apply — this section only covers what's different about editing in place.
 
 ## After writing
 

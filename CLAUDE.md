@@ -22,7 +22,7 @@ This project exists to learn Elasticsearch hands-on by building a small log sear
 - **Durable Guidance Lives in the Repo:** When a correction or preference emerges during a session that should persist beyond this conversation, write it into this file or the relevant skill file — not only into your own memory system. Memory is local to this machine and doesn't travel with the repo; anything meant to reproduce identically on a new VM or for a collaborator has to be a checked-in file.
 - **Skill Triggers:**
     - **`learning-session-notes`:** Use at the end of a session, or when a significant milestone is reached mid-session, to write up technical takeaways and log progress.
-    - **`curriculum-creation`:** Use to process structural updates, milestone additions, or refinements to the project roadmap.
+    - **`curriculum-creation`:** Use to process structural updates, milestone additions, or refinements to the project roadmap. Also flag it proactively — as a suggestion only, never an unprompted edit — when a session shows a real signal: repeated clarifying questions on one topic, a side-project idea that doesn't fit the current session, or a deliverable that needed more scaffolding than planned. Raise it at a natural pause, not mid-task. If the user doesn't act on it, drop it.
     - **`self-review`:** At the start of a session, run its setup check first (installs its `SessionStart` hook on first use, asking before doing so) — then its harvest step, unprompted every session, cheap and self-contained. Run its compile step whenever the user asks to be reviewed as a learner.
 
 ## Tools

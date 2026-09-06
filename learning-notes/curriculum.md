@@ -178,12 +178,12 @@ This is a side project, not a continuation of the main one — it doesn't feed i
 **Concepts to cover before the tasks:** what `tsvector` and `tsquery` are (Postgres's own text-search types), how a GIN index over a `tsvector` column is Postgres's version of an inverted index, and what `pg_trgm` adds (trigram-based fuzzy/substring matching) — just enough to run the first comparison queries. Where Postgres's approach actually stops scaling like Elasticsearch's is the deep dive's job, once there are real results from both systems to compare.
 
 **Tasks:**
-- [ ] Add a `tsvector` column (or a generated column) to a Postgres table holding the same log data used in Session 2
-- [ ] Create a GIN index on it and run a `tsquery` search, comparing syntax and results to the Elasticsearch `match` query from Session 3
-- [ ] Install `pg_trgm` and run a substring/fuzzy search, comparing to Elasticsearch's `wildcard`/`fuzzy` queries from the same session
+- [x] Add a `tsvector` column (or a generated column) to a Postgres table holding the same log data used in Session 2
+- [x] Create a GIN index on it and run a `tsquery` search, comparing syntax and results to the Elasticsearch `match` query from Session 3
+- [x] Install `pg_trgm` and run a substring/fuzzy search, comparing to Elasticsearch's `wildcard`/`fuzzy` queries from the same session
 
 **Deep dive:** now that both systems have answered the same queries, go deeper on where they actually diverge and why: `ts_rank`'s ranking model versus BM25 (simpler, no field-length normalization by default), that Postgres FTS runs on a single node with no built-in equivalent of Elasticsearch's distributed aggregation framework (a `GROUP BY` can approximate a bucket aggregation, but there's no native nested bucket/metric pattern), and the operational cost on the other side of the trade-off — running and maintaining a second stateful system versus staying inside a database you're already operating. Land this on a concrete decision framework: at what point (data volume, query complexity, need for real aggregations, need for horizontal scaling) does that operational cost start being worth paying.
 
-- [ ] Closing hands-on: write a short comparison note answering, for this project's actual dataset and query patterns, whether a standalone Elasticsearch would be worth deploying or whether Postgres FTS would have been enough — and why
+- [x] Closing hands-on: write a short comparison note answering, for this project's actual dataset and query patterns, whether a standalone Elasticsearch would be worth deploying or whether Postgres FTS would have been enough — and why
 
 **Deliverable:** a short written comparison of Postgres full-text search vs Elasticsearch, backed by hands-on queries against the same dataset, that lands on an actual recommendation for when each is the right call.

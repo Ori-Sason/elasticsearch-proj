@@ -50,7 +50,7 @@ Before writing, always read `reference/user-background.md` to calibrate your sta
    - *Conversational Explanation & Analogy*
    - *Hands-on:* Code block + raw output snippet.
    - *Trade-off / Bottom Line:* Explicit consequences.
-5. **Questions I Had:** Short Q&A of specific edge cases or clarifications discussed in the session.
+5. **Questions I Had:** Short Q&A, but only for questions tangential to the topic. On-topic questions get folded inline into the relevant Walkthrough section instead.
 
 ---
 

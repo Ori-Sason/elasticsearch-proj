@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/ubuntu/projects/elasticsearch-proj/.claude/skills/self-review/scripts/session_start_hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}

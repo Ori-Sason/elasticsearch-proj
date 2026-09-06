@@ -23,6 +23,7 @@ This project exists to learn Elasticsearch hands-on by building a small log sear
 - **Skill Triggers:**
     - **`learning-session-notes`:** Use at the end of a session, or when a significant milestone is reached mid-session, to write up technical takeaways and log progress.
     - **`curriculum-creation`:** Use to process structural updates, milestone additions, or refinements to the project roadmap.
+    - **`self-review`:** At the start of a session, run its setup check first (installs its `SessionStart` hook on first use, asking before doing so) — then its harvest step, unprompted every session, cheap and self-contained. Run its compile step whenever the user asks to be reviewed as a learner.
 
 ## Tools
 

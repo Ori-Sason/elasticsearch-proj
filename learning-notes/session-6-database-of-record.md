@@ -302,7 +302,7 @@ Readers never see a gap, because the alias always points at a fully-built index 
 
 ## Questions I Had
 
-** In `reindex-es.py`, why is the reindex script's bulk variable called `actions`, not `documents`?** `actions` matches the bulk API's own vocabulary — each dict carries `_index`/`_id` metadata alongside a `_source` body, so it's an instruction (`index`/`create`/`delete`/`update`), not just a document. `_source` alone is the document; the dict as a whole is the operation to perform. The same reasoning applies retroactively to session 2's `action_stream()` in `scripts/generate_logs.py`.
+**In `reindex-es.py`, why is the reindex script's bulk variable called `actions`, not `documents`?** `actions` matches the bulk API's own vocabulary — each dict carries `_index`/`_id` metadata alongside a `_source` body, so it's an instruction (`index`/`create`/`delete`/`update`), not just a document. `_source` alone is the document; the dict as a whole is the operation to perform. The same reasoning applies retroactively to session 2's `action_stream()` in `scripts/generate_logs.py`.
 
 **Why does `PROJECT_ROOT / "db/logs.db"` work without an f-string?** `pathlib.Path` overloads `__truediv__`, so `/` isn't string concatenation here — it's operator overloading, the same mechanism as overloading `+` on a custom class. `PROJECT_ROOT / "db/logs.db"` calls `PROJECT_ROOT.__truediv__(...)`, returning a new `Path` with the segments joined using the OS-correct separator. `sqlite3.connect()` accepts that `Path` object directly, since `Path` implements `__fspath__`.
 

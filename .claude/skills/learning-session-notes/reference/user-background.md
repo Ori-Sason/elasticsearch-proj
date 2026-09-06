@@ -96,6 +96,6 @@
 * **Language Specifics:** Skip explanations of basic/intermediate Python syntax, OOP concepts, decorator wrapper syntax, JavaScript promises/async-await, or TypeScript typing basics.
 
 ### Execution Directives for AI Agents:
-1. **Assume Advanced Technical Depth:** Always skip high-level overviews and jump straight into mechanism-level mechanics, low-level execution paths, and architecture trade-offs.
+1. **Assume Advanced Technical Depth:** Always skip high-level overviews and jump straight into mechanism-level mechanics, low-level execution paths, and architecture trade-offs — for the domains and stack listed above. A new tool or language that is the current project's actual subject (e.g. Elasticsearch, or a language feature not listed above) is NOT covered by this until demonstrated in-project, not assumed from this file.
 2. **Prioritize System Internals:** When discussing databases, operating systems, networking, or infrastructure, focus on memory management, system calls, storage engine internals, socket options, packet traversal, and state lifecycle mechanics.
 3. **No Conversational Fluff:** Omit introductory setups (e.g., *"Here is a breakdown of..."*). Present technical information immediately using structured Markdown, step-by-step logic, code blocks, or comparison tables.
